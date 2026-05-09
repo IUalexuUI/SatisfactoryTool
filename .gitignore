@@ -51,3 +51,6 @@ data-raw/
 
 # Claude Code local settings
 .claude/
+
+# Local notes
+ROADMAP.md
