@@ -391,53 +391,111 @@ export function solveSystem(spec: SystemSpec): Solution {
     }
   }
 
-  // Phase 3: each fill target claims its share of the remaining budget,
-  // greedy in declaration order.
-  const achievedFill: Flow[] = [];
-  for (const fill of fillTargets) {
-    if (!fill.item) continue;
-    const probe = expandDemand([{ item: fill.item, ratePerMin: 1 }], "snap5");
-    let bestRate = Infinity;
-    let usesAnyDeclaredSource = false;
-    let exhaustedSource: string | null = null;
+  // Phase 3: distribute the remaining source budget among fill targets.
+  //
+  // 3a. Equal split — every source is divided into N equal slices among the
+  //     fill targets that use it. Each fill target's rate is the minimum
+  //     ratio of its slice to its unit consumption across the sources it
+  //     touches. With one fill target this collapses to "take everything";
+  //     with two it gives each side exactly half of every shared source.
+  //
+  // 3b. Priority redistribution — if a fill target was bottlenecked by one
+  //     source (e.g. coal) and didn't use its full slice of another (e.g.
+  //     iron), the leftover is offered to fill targets in declaration order.
+  //     This is what the user asked for: equal first, but earlier targets
+  //     win any remainder.
+
+  const fillProbes = fillTargets
+    .filter((f) => f.item)
+    .map((f) => ({
+      target: f as { item: string; ratePerMin: number; fill?: boolean },
+      unit: expandDemand(
+        [{ item: f.item as string, ratePerMin: 1 }],
+        "snap5",
+      ).rawInputs,
+    }));
+
+  // How many fill targets consume each source — used to compute equal shares.
+  const usersBySource = new Map<string, number>();
+  for (const fp of fillProbes) {
     for (const src of sources) {
-      const unit = probe.rawInputs.get(src.item) ?? 0;
+      if ((fp.unit.get(src.item) ?? 0) > 0) {
+        usersBySource.set(src.item, (usersBySource.get(src.item) ?? 0) + 1);
+      }
+    }
+  }
+
+  const usesAnySource: boolean[] = fillProbes.map((fp) =>
+    sources.some((s) => (fp.unit.get(s.item) ?? 0) > 0),
+  );
+
+  // 3a: initial equal allocation.
+  const fillRates: number[] = fillProbes.map((fp, i) => {
+    if (!usesAnySource[i]) {
+      warnings.push(
+        `«${itemName(fp.target.item)}» не использует заданное сырьё — оставлено ${fp.target.ratePerMin}/мин.`,
+      );
+      return fp.target.ratePerMin;
+    }
+    let rate = Infinity;
+    for (const src of sources) {
+      const unit = fp.unit.get(src.item) ?? 0;
       if (unit <= 0) continue;
-      usesAnyDeclaredSource = true;
       const rem = remaining.get(src.item) ?? 0;
-      if (rem <= 1e-9) {
-        bestRate = 0;
-        exhaustedSource = src.item;
+      const count = usersBySource.get(src.item) ?? 1;
+      const share = rem / count;
+      if (share <= 0) return 0;
+      rate = Math.min(rate, share / unit);
+    }
+    return Number.isFinite(rate) ? rate : 0;
+  });
+
+  // 3b: redistribute surplus in declaration order.
+  const surplus = new Map(remaining);
+  for (let i = 0; i < fillProbes.length; i++) {
+    if (!usesAnySource[i]) continue;
+    const fp = fillProbes[i];
+    const rate = fillRates[i];
+    for (const src of sources) {
+      const consumed = (fp.unit.get(src.item) ?? 0) * rate;
+      surplus.set(src.item, (surplus.get(src.item) ?? 0) - consumed);
+    }
+  }
+  for (let i = 0; i < fillProbes.length; i++) {
+    if (!usesAnySource[i]) continue;
+    const fp = fillProbes[i];
+    let growth = Infinity;
+    let canGrow = false;
+    for (const src of sources) {
+      const unit = fp.unit.get(src.item) ?? 0;
+      if (unit <= 0) continue;
+      canGrow = true;
+      const left = surplus.get(src.item) ?? 0;
+      if (left <= 1e-9) {
+        growth = 0;
         break;
       }
-      const max = rem / unit;
-      if (max < bestRate) bestRate = max;
+      growth = Math.min(growth, left / unit);
     }
-    if (!usesAnyDeclaredSource) {
-      warnings.push(
-        `«${itemName(fill.item)}» не использует заданное сырьё — оставлено ${fill.ratePerMin}/мин.`,
-      );
-      bestRate = fill.ratePerMin;
+    if (!canGrow || !Number.isFinite(growth) || growth <= 1e-9) continue;
+    fillRates[i] += growth;
+    for (const src of sources) {
+      const consumed = (fp.unit.get(src.item) ?? 0) * growth;
+      surplus.set(src.item, (surplus.get(src.item) ?? 0) - consumed);
     }
-    if (!Number.isFinite(bestRate)) {
-      bestRate = fill.ratePerMin;
-    }
-    if (bestRate <= 1e-9) {
-      warnings.push(
-        `Не хватило сырья на «${itemName(fill.item)}»${exhaustedSource ? ` (исчерпано «${itemName(exhaustedSource)}»)` : ""}.`,
-      );
+  }
+
+  const achievedFill: Flow[] = [];
+  for (let i = 0; i < fillProbes.length; i++) {
+    const fp = fillProbes[i];
+    const rate = fillRates[i];
+    if (rate <= 1e-9) {
+      if (usesAnySource[i]) {
+        warnings.push(`Не хватило сырья на «${itemName(fp.target.item)}».`);
+      }
       continue;
     }
-    const filled: Flow = { item: fill.item, ratePerMin: bestRate };
-    achievedFill.push(filled);
-
-    // Subtract this fill target's consumption from the remaining budget so
-    // subsequent fill targets see less.
-    const filledProbe = expandDemand([filled], "snap5");
-    for (const src of sources) {
-      const consumed = filledProbe.rawInputs.get(src.item) ?? 0;
-      remaining.set(src.item, (remaining.get(src.item) ?? 0) - consumed);
-    }
+    achievedFill.push({ item: fp.target.item, ratePerMin: rate });
   }
 
   const requested: Flow[] = allValid.map((t) => ({
