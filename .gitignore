@@ -45,3 +45,9 @@ coverage/
 
 # TypeScript
 *.tsbuildinfo
+
+# Raw game data (large, copied from local Satisfactory install)
+data-raw/
+
+# Claude Code local settings
+.claude/

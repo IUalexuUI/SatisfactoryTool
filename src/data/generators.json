@@ -1,0 +1,168 @@
+{
+  "Build_GeneratorCoal_C": {
+    "className": "Build_GeneratorCoal_C",
+    "name": "Coal-Powered Generator",
+    "nameRu": "Угольный генератор",
+    "kind": "FGBuildableGeneratorFuel",
+    "powerProductionMW": 75,
+    "fuelLoadAmount": 1,
+    "requiresSupplementalResource": true,
+    "supplementalLoadAmount": 1000,
+    "supplementalToPowerRatio": 10,
+    "fuels": [
+      {
+        "fuel": "Desc_Coal_C",
+        "supplementalResource": "Desc_Water_C",
+        "byproduct": null,
+        "byproductAmount": 0
+      },
+      {
+        "fuel": "Desc_CompactedCoal_C",
+        "supplementalResource": "Desc_Water_C",
+        "byproduct": null,
+        "byproductAmount": 0
+      },
+      {
+        "fuel": "Desc_PetroleumCoke_C",
+        "supplementalResource": "Desc_Water_C",
+        "byproduct": null,
+        "byproductAmount": 0
+      }
+    ]
+  },
+  "Build_GeneratorFuel_C": {
+    "className": "Build_GeneratorFuel_C",
+    "name": "Fuel-Powered Generator",
+    "nameRu": "Топливный генератор",
+    "kind": "FGBuildableGeneratorFuel",
+    "powerProductionMW": 250,
+    "fuelLoadAmount": 1000,
+    "requiresSupplementalResource": false,
+    "supplementalLoadAmount": 0,
+    "supplementalToPowerRatio": 0,
+    "fuels": [
+      {
+        "fuel": "Desc_LiquidFuel_C",
+        "supplementalResource": null,
+        "byproduct": null,
+        "byproductAmount": 0
+      },
+      {
+        "fuel": "Desc_LiquidTurboFuel_C",
+        "supplementalResource": null,
+        "byproduct": null,
+        "byproductAmount": 0
+      },
+      {
+        "fuel": "Desc_LiquidBiofuel_C",
+        "supplementalResource": null,
+        "byproduct": null,
+        "byproductAmount": 0
+      },
+      {
+        "fuel": "Desc_RocketFuel_C",
+        "supplementalResource": null,
+        "byproduct": null,
+        "byproductAmount": 0
+      },
+      {
+        "fuel": "Desc_IonizedFuel_C",
+        "supplementalResource": null,
+        "byproduct": null,
+        "byproductAmount": 0
+      }
+    ]
+  },
+  "Build_GeneratorBiomass_Automated_C": {
+    "className": "Build_GeneratorBiomass_Automated_C",
+    "name": "Biomass Burner",
+    "nameRu": "Сжигатель биомассы",
+    "kind": "FGBuildableGeneratorFuel",
+    "powerProductionMW": 30,
+    "fuelLoadAmount": 1,
+    "requiresSupplementalResource": false,
+    "supplementalLoadAmount": 0,
+    "supplementalToPowerRatio": 0,
+    "fuels": [
+      {
+        "fuel": "Desc_Leaves_C",
+        "supplementalResource": null,
+        "byproduct": null,
+        "byproductAmount": 0
+      },
+      {
+        "fuel": "Desc_Wood_C",
+        "supplementalResource": null,
+        "byproduct": null,
+        "byproductAmount": 0
+      },
+      {
+        "fuel": "Desc_Mycelia_C",
+        "supplementalResource": null,
+        "byproduct": null,
+        "byproductAmount": 0
+      },
+      {
+        "fuel": "Desc_GenericBiomass_C",
+        "supplementalResource": null,
+        "byproduct": null,
+        "byproductAmount": 0
+      },
+      {
+        "fuel": "Desc_Biofuel_C",
+        "supplementalResource": null,
+        "byproduct": null,
+        "byproductAmount": 0
+      },
+      {
+        "fuel": "Desc_PackagedBiofuel_C",
+        "supplementalResource": null,
+        "byproduct": null,
+        "byproductAmount": 0
+      }
+    ]
+  },
+  "Build_GeneratorNuclear_C": {
+    "className": "Build_GeneratorNuclear_C",
+    "name": "Nuclear Power Plant",
+    "nameRu": "Атомная электростанция",
+    "kind": "FGBuildableGeneratorNuclear",
+    "powerProductionMW": 2500,
+    "fuelLoadAmount": 1,
+    "requiresSupplementalResource": true,
+    "supplementalLoadAmount": 10000,
+    "supplementalToPowerRatio": 1.6,
+    "fuels": [
+      {
+        "fuel": "Desc_NuclearFuelRod_C",
+        "supplementalResource": "Desc_Water_C",
+        "byproduct": "Desc_NuclearWaste_C",
+        "byproductAmount": 50
+      },
+      {
+        "fuel": "Desc_PlutoniumFuelRod_C",
+        "supplementalResource": "Desc_Water_C",
+        "byproduct": "Desc_PlutoniumWaste_C",
+        "byproductAmount": 10
+      },
+      {
+        "fuel": "Desc_FicsoniumFuelRod_C",
+        "supplementalResource": "Desc_Water_C",
+        "byproduct": null,
+        "byproductAmount": 0
+      }
+    ]
+  },
+  "Build_GeneratorGeoThermal_C": {
+    "className": "Build_GeneratorGeoThermal_C",
+    "name": "Geothermal Generator",
+    "nameRu": "Геотермальный генератор",
+    "kind": "FGBuildableGeneratorGeoThermal",
+    "powerProductionMW": 0,
+    "fuelLoadAmount": 0,
+    "requiresSupplementalResource": false,
+    "supplementalLoadAmount": 0,
+    "supplementalToPowerRatio": 0,
+    "fuels": []
+  }
+}

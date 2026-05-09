@@ -1,0 +1,154 @@
+{
+  "Build_QuantumEncoder_C": {
+    "className": "Build_QuantumEncoder_C",
+    "name": "Quantum Encoder",
+    "nameRu": "Квантовый шифратор",
+    "description": "The Quantum Encoder uses Excited Photonic Matter to produce the most complex of parts, controlling development up to the quantum level.\r\n\r\nWarning: Power usage is extremely high and unstable.",
+    "kind": "FGBuildableManufacturerVariablePower",
+    "powerMW": 0.1,
+    "powerExponent": 1.321929,
+    "manufacturingSpeed": 1,
+    "variablePower": {
+      "min": 0,
+      "max": 2000
+    },
+    "somersloopSlots": 4,
+    "somersloopBoostMultiplier": 0.25
+  },
+  "Build_Converter_C": {
+    "className": "Build_Converter_C",
+    "name": "Converter",
+    "nameRu": "Преобразователь",
+    "description": "The Converter harnesses Reanimated SAM to enable precise matter and energy transmutation.\r\n\r\nWarning: Power usage is very high and unstable.",
+    "kind": "FGBuildableManufacturerVariablePower",
+    "powerMW": 0.1,
+    "powerExponent": 1.321929,
+    "manufacturingSpeed": 1,
+    "variablePower": {
+      "min": 100,
+      "max": 400
+    },
+    "somersloopSlots": 2,
+    "somersloopBoostMultiplier": 0.5
+  },
+  "Build_HadronCollider_C": {
+    "className": "Build_HadronCollider_C",
+    "name": "Particle Accelerator",
+    "nameRu": "Ускоритель частиц",
+    "description": "Uses electromagnetic fields to propel particles to very high speeds and energies. The specific design allows for a variety of processes, including matter generation and conversion.\r\n\r\nWarning: Power usage is extremely high and unstable, and varies per recipe.",
+    "kind": "FGBuildableManufacturerVariablePower",
+    "powerMW": 0.1,
+    "powerExponent": 1.321929,
+    "manufacturingSpeed": 1,
+    "variablePower": {
+      "min": 250,
+      "max": 1500
+    },
+    "somersloopSlots": 4,
+    "somersloopBoostMultiplier": 0.25
+  },
+  "Build_OilRefinery_C": {
+    "className": "Build_OilRefinery_C",
+    "name": "Refinery",
+    "nameRu": "Очистительный завод",
+    "description": "Refines fluid and/or solid parts into other parts.\r\nHead Lift: 10 m\r\n(Allows fluids to be transported 10 meters upwards.)\r\n\r\nHas both Conveyor Belt and Pipeline input and output ports so that a wide range of recipes can be automated.",
+    "kind": "FGBuildableManufacturer",
+    "powerMW": 30,
+    "powerExponent": 1.321929,
+    "manufacturingSpeed": 1,
+    "variablePower": null,
+    "somersloopSlots": 2,
+    "somersloopBoostMultiplier": 0.5
+  },
+  "Build_FoundryMk1_C": {
+    "className": "Build_FoundryMk1_C",
+    "name": "Foundry",
+    "nameRu": "Литейная",
+    "description": "Smelts 2 resources into alloy ingots.\r\n\r\nCan be automated by feeding ore in via Conveyor Belts connected to the input ports. The resulting ingots can be automatically extracted by connecting a Conveyor Belt to the output port.",
+    "kind": "FGBuildableManufacturer",
+    "powerMW": 16,
+    "powerExponent": 1.321929,
+    "manufacturingSpeed": 1,
+    "variablePower": null,
+    "somersloopSlots": 2,
+    "somersloopBoostMultiplier": 0.5
+  },
+  "Build_Packager_C": {
+    "className": "Build_Packager_C",
+    "name": "Packager",
+    "nameRu": "Упаковщик",
+    "description": "Packages and unpackages fluids.\r\nHead Lift: 10 m\r\n(Allows fluids to be transported 10 meters upwards.)\r\n\r\nHas both Conveyor Belt and Pipeline input and output ports so that a wide range of recipes can be automated.",
+    "kind": "FGBuildableManufacturer",
+    "powerMW": 10,
+    "powerExponent": 1.321929,
+    "manufacturingSpeed": 1,
+    "variablePower": null,
+    "somersloopSlots": 0,
+    "somersloopBoostMultiplier": 1
+  },
+  "Build_ManufacturerMk1_C": {
+    "className": "Build_ManufacturerMk1_C",
+    "name": "Manufacturer",
+    "nameRu": "Изготовитель",
+    "description": "Crafts 3 or 4 parts into another part.\r\n\r\nCan be automated by feeding component parts in via Conveyor Belts connected to the input ports. The resulting parts can be automatically extracted by connecting a Conveyor Belt to the output port.",
+    "kind": "FGBuildableManufacturer",
+    "powerMW": 55,
+    "powerExponent": 1.321929,
+    "manufacturingSpeed": 1,
+    "variablePower": null,
+    "somersloopSlots": 4,
+    "somersloopBoostMultiplier": 0.25
+  },
+  "Build_AssemblerMk1_C": {
+    "className": "Build_AssemblerMk1_C",
+    "name": "Assembler",
+    "nameRu": "Сборщик",
+    "description": "Crafts 2 parts into another part.\r\n\r\nCan be automated by feeding component parts in via Conveyor Belts connected to the input ports. The resulting parts can be automatically extracted by connecting a Conveyor Belt to the output port.",
+    "kind": "FGBuildableManufacturer",
+    "powerMW": 15,
+    "powerExponent": 1.321929,
+    "manufacturingSpeed": 1,
+    "variablePower": null,
+    "somersloopSlots": 2,
+    "somersloopBoostMultiplier": 0.5
+  },
+  "Build_Blender_C": {
+    "className": "Build_Blender_C",
+    "name": "Blender",
+    "nameRu": "Смеситель",
+    "description": "Blends fluids together or combines them with solid parts in a wide variety of processes.\r\nHead Lift: 10 m\r\n(Allows fluids to be transported 10 meters upwards.)\r\n\r\nHas both Conveyor Belt and Pipeline input and output ports.",
+    "kind": "FGBuildableManufacturer",
+    "powerMW": 75,
+    "powerExponent": 1.321929,
+    "manufacturingSpeed": 1,
+    "variablePower": null,
+    "somersloopSlots": 4,
+    "somersloopBoostMultiplier": 0.25
+  },
+  "Build_ConstructorMk1_C": {
+    "className": "Build_ConstructorMk1_C",
+    "name": "Constructor",
+    "nameRu": "Конструктор",
+    "description": "Crafts 1 part into another part.\r\n\r\nCan be automated by feeding component parts in via a Conveyor Belt connected to the input port. The resulting parts can be automatically extracted by connecting a Conveyor Belt to the output port.",
+    "kind": "FGBuildableManufacturer",
+    "powerMW": 4,
+    "powerExponent": 1.321929,
+    "manufacturingSpeed": 1,
+    "variablePower": null,
+    "somersloopSlots": 1,
+    "somersloopBoostMultiplier": 1
+  },
+  "Build_SmelterMk1_C": {
+    "className": "Build_SmelterMk1_C",
+    "name": "Smelter",
+    "nameRu": "Плавильня",
+    "description": "Smelts ore into ingots.\r\n\r\nCan be automated by feeding ore in via a Conveyor Belt connected to the input port. The resulting ingots can be automatically extracted by connecting a Conveyor Belt to the output port.",
+    "kind": "FGBuildableManufacturer",
+    "powerMW": 4,
+    "powerExponent": 1.321929,
+    "manufacturingSpeed": 1,
+    "variablePower": null,
+    "somersloopSlots": 0,
+    "somersloopBoostMultiplier": 1
+  }
+}

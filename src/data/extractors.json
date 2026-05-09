@@ -1,0 +1,107 @@
+{
+  "Build_WaterPump_C": {
+    "className": "Build_WaterPump_C",
+    "name": "Water Extractor",
+    "nameRu": "Экстрактор воды",
+    "kind": "FGBuildableWaterPump",
+    "powerMW": 20,
+    "powerExponent": 1.321929,
+    "itemsPerCycle": 2000,
+    "cycleTimeSec": 1,
+    "allowedForms": [
+      "liquid"
+    ],
+    "onlyAllowCertainResources": true,
+    "allowedResources": [
+      "Desc_Water_C"
+    ],
+    "somersloopSlots": 0
+  },
+  "Build_OilPump_C": {
+    "className": "Build_OilPump_C",
+    "name": "Oil Extractor",
+    "nameRu": "Экстрактор нефти",
+    "kind": "FGBuildableResourceExtractor",
+    "powerMW": 40,
+    "powerExponent": 1.321929,
+    "itemsPerCycle": 2000,
+    "cycleTimeSec": 1,
+    "allowedForms": [
+      "liquid"
+    ],
+    "onlyAllowCertainResources": true,
+    "allowedResources": [
+      "Desc_LiquidOil_C"
+    ],
+    "somersloopSlots": 0
+  },
+  "Build_MinerMk2_C": {
+    "className": "Build_MinerMk2_C",
+    "name": "Miner Mk.2",
+    "nameRu": "Буровая установка ур. 2",
+    "kind": "FGBuildableResourceExtractor",
+    "powerMW": 15,
+    "powerExponent": 1.321929,
+    "itemsPerCycle": 1,
+    "cycleTimeSec": 0.5,
+    "allowedForms": [
+      "solid"
+    ],
+    "onlyAllowCertainResources": false,
+    "allowedResources": [],
+    "somersloopSlots": 0
+  },
+  "Build_MinerMk1_C": {
+    "className": "Build_MinerMk1_C",
+    "name": "Miner Mk.1",
+    "nameRu": "Буровая установка ур. 1",
+    "kind": "FGBuildableResourceExtractor",
+    "powerMW": 5,
+    "powerExponent": 1.321929,
+    "itemsPerCycle": 1,
+    "cycleTimeSec": 1,
+    "allowedForms": [
+      "solid"
+    ],
+    "onlyAllowCertainResources": false,
+    "allowedResources": [],
+    "somersloopSlots": 0
+  },
+  "Build_MinerMk3_C": {
+    "className": "Build_MinerMk3_C",
+    "name": "Miner Mk.3",
+    "nameRu": "Буровая установка ур. 3",
+    "kind": "FGBuildableResourceExtractor",
+    "powerMW": 45,
+    "powerExponent": 1.321929,
+    "itemsPerCycle": 1,
+    "cycleTimeSec": 0.25,
+    "allowedForms": [
+      "solid"
+    ],
+    "onlyAllowCertainResources": false,
+    "allowedResources": [],
+    "somersloopSlots": 0
+  },
+  "Build_FrackingExtractor_C": {
+    "className": "Build_FrackingExtractor_C",
+    "name": "Resource Well Extractor",
+    "nameRu": "Экстрактор скважины",
+    "kind": "FGBuildableFrackingExtractor",
+    "powerMW": 0,
+    "powerExponent": 1.321929,
+    "itemsPerCycle": 1000,
+    "cycleTimeSec": 1,
+    "allowedForms": [
+      "liquid",
+      "gas"
+    ],
+    "onlyAllowCertainResources": true,
+    "allowedResources": [
+      "Desc_LiquidOil_C",
+      "Desc_NitrogenGas_C",
+      "Desc_Water_C"
+    ],
+    "somersloopSlots": 0
+  }
+}
