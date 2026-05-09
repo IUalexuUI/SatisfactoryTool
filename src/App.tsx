@@ -104,7 +104,7 @@ export default function App() {
               title={t.sidebar.addSystemTitle}
               aria-label={t.sidebar.addSystemAria}
             >
-              +
+              <PlusIcon />
             </button>
           </div>
           <div className="system-list">
@@ -191,6 +191,25 @@ export default function App() {
         </main>
       </div>
     </div>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M6 1 L6 11 M1 6 L11 6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

@@ -158,7 +158,20 @@ function FlowEditor({
           aria-label={t.system.add}
           title={t.system.add}
         >
-          +
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 12 12"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              d="M6 1 L6 11 M1 6 L11 6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
         </button>
       </header>
       {flows.length === 0 && emptyMessage && (
