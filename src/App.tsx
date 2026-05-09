@@ -1,129 +1,30 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { items, itemsList, displayName, meta } from "./data";
 import {
-  items,
-  buildings,
-  itemsList,
-  recipesByProduct,
-  recipesByIngredient,
-  ratePerMin,
-  displayName,
-  meta,
-} from "./data";
-import type { Item, Recipe } from "./data/types";
+  loadSystems,
+  newSystem,
+  saveSystems,
+  type ProductionSystem,
+} from "./systems";
+import { ItemDetail } from "./components/ItemDetail";
+import { SystemView } from "./components/SystemView";
 import "./App.css";
 
-function RecipeCard({ recipe }: { recipe: Recipe }) {
-  const machineRefs = recipe.producedIn
-    .map((c) => buildings[c])
-    .filter((b): b is NonNullable<typeof b> => Boolean(b));
-  const machineLabel = machineRefs.length
-    ? machineRefs.map((m) => displayName(m)).join(", ")
-    : recipe.producedIn.join(", ");
-
-  return (
-    <article className={`recipe ${recipe.alternate ? "is-alt" : ""}`}>
-      <header className="recipe-head">
-        <span className="recipe-name">{displayName(recipe)}</span>
-        <span className="recipe-meta">
-          <span className="machine">{machineLabel}</span>
-          <span className="duration">{recipe.durationSec}с</span>
-        </span>
-      </header>
-      <div className="recipe-flow">
-        <ul className="flow-side">
-          {recipe.ingredients.map((ing) => {
-            const it = items[ing.item];
-            return (
-              <li key={ing.item}>
-                <span className={`dot form-${it?.form ?? "solid"}`} />
-                <span className="ent-name">
-                  {it ? displayName(it) : ing.item}
-                </span>
-                <span className="ent-rate">
-                  {ing.amount} ({ratePerMin(ing.amount, recipe.durationSec).toFixed(1)}/мин)
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-        <span className="arrow" aria-hidden="true">→</span>
-        <ul className="flow-side">
-          {recipe.products.map((p) => {
-            const it = items[p.item];
-            return (
-              <li key={p.item}>
-                <span className={`dot form-${it?.form ?? "solid"}`} />
-                <span className="ent-name">
-                  {it ? displayName(it) : p.item}
-                </span>
-                <span className="ent-rate">
-                  {p.amount} ({ratePerMin(p.amount, recipe.durationSec).toFixed(1)}/мин)
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </article>
-  );
-}
-
-function ItemDetail({ item }: { item: Item }) {
-  const producedBy = recipesByProduct.get(item.className) ?? [];
-  const usedIn = recipesByIngredient.get(item.className) ?? [];
-
-  return (
-    <>
-      <header className="detail-head">
-        <h2>{displayName(item)}</h2>
-        {item.nameRu && <div className="subtitle">{item.name}</div>}
-        <div className="badges">
-          <span className={`badge form-${item.form}`}>{item.form}</span>
-          {item.sinkPoints > 0 && (
-            <span className="badge">⨺ {item.sinkPoints}</span>
-          )}
-          {item.energyMJ > 0 && (
-            <span className="badge">⚡ {item.energyMJ} МДж</span>
-          )}
-          {item.radioactive && (
-            <span className="badge badge-danger">☢ радиоактивно</span>
-          )}
-        </div>
-        {item.description && <p className="desc">{item.description}</p>}
-      </header>
-
-      <section className="recipe-group">
-        <h3>
-          Производится <span className="count">{producedBy.length}</span>
-        </h3>
-        {producedBy.length === 0 && (
-          <p className="empty">Сырьё либо предмет добывается экстрактором.</p>
-        )}
-        {producedBy.map((r) => (
-          <RecipeCard key={r.className} recipe={r} />
-        ))}
-      </section>
-
-      <section className="recipe-group">
-        <h3>
-          Используется <span className="count">{usedIn.length}</span>
-        </h3>
-        {usedIn.length === 0 && (
-          <p className="empty">Не входит ни в один производственный рецепт.</p>
-        )}
-        {usedIn.map((r) => (
-          <RecipeCard key={r.className} recipe={r} />
-        ))}
-      </section>
-    </>
-  );
-}
+type Selection =
+  | { kind: "none" }
+  | { kind: "item"; itemClass: string }
+  | { kind: "system"; systemId: string };
 
 export default function App() {
+  const [systems, setSystems] = useState<ProductionSystem[]>(() => loadSystems());
+  const [selection, setSelection] = useState<Selection>({ kind: "none" });
   const [query, setQuery] = useState("");
-  const [selectedClass, setSelectedClass] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
+  useEffect(() => {
+    saveSystems(systems);
+  }, [systems]);
+
+  const filteredItems = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return itemsList;
     return itemsList.filter(
@@ -134,7 +35,29 @@ export default function App() {
     );
   }, [query]);
 
-  const selected = selectedClass ? (items[selectedClass] ?? null) : null;
+  const selectedSystem =
+    selection.kind === "system"
+      ? (systems.find((s) => s.id === selection.systemId) ?? null)
+      : null;
+  const selectedItem =
+    selection.kind === "item" ? (items[selection.itemClass] ?? null) : null;
+
+  function addSystem() {
+    const sys = newSystem();
+    setSystems((prev) => [...prev, sys]);
+    setSelection({ kind: "system", systemId: sys.id });
+  }
+
+  function updateSystem(next: ProductionSystem) {
+    setSystems((prev) => prev.map((s) => (s.id === next.id ? next : s)));
+  }
+
+  function deleteSystem(id: string) {
+    setSystems((prev) => prev.filter((s) => s.id !== id));
+    if (selection.kind === "system" && selection.systemId === id) {
+      setSelection({ kind: "none" });
+    }
+  }
 
   return (
     <div className="layout">
@@ -146,43 +69,97 @@ export default function App() {
             ({meta.counts.alternateRecipes} альт.)
           </div>
         </div>
+
+        <div className="section-head">
+          <span>Системы</span>
+          <button
+            type="button"
+            className="add-btn"
+            onClick={addSystem}
+            title="Создать новую систему"
+            aria-label="Создать систему"
+          >
+            +
+          </button>
+        </div>
+        <div className="system-list">
+          {systems.length === 0 && (
+            <div className="empty pad">
+              Нажми «+» — создай первую цепочку.
+            </div>
+          )}
+          {systems.map((s) => {
+            const target = s.targetItem ? items[s.targetItem] : null;
+            const isActive =
+              selection.kind === "system" && selection.systemId === s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                className={`system-row ${isActive ? "is-active" : ""}`}
+                onClick={() => setSelection({ kind: "system", systemId: s.id })}
+              >
+                <span className="system-name-label">{s.name}</span>
+                <span className="system-target">
+                  {target
+                    ? `${s.targetRatePerMin}/мин · ${displayName(target)}`
+                    : "не настроена"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="section-head">
+          <span>Предметы</span>
+        </div>
         <input
           className="search"
           type="search"
           placeholder="Поиск (рус / англ / className)…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          autoFocus
         />
         <div className="item-list">
-          {filtered.length === 0 && (
+          {filteredItems.length === 0 && (
             <div className="empty pad">Ничего не найдено</div>
           )}
-          {filtered.map((i) => (
-            <button
-              key={i.className}
-              type="button"
-              className={`item-row ${selectedClass === i.className ? "is-active" : ""}`}
-              onClick={() => setSelectedClass(i.className)}
-            >
-              <span className={`dot form-${i.form}`} />
-              <span className="item-names">
-                <span className="ru">{displayName(i)}</span>
-                {i.nameRu && <span className="en">{i.name}</span>}
-              </span>
-            </button>
-          ))}
+          {filteredItems.map((i) => {
+            const isActive =
+              selection.kind === "item" && selection.itemClass === i.className;
+            return (
+              <button
+                key={i.className}
+                type="button"
+                className={`item-row ${isActive ? "is-active" : ""}`}
+                onClick={() =>
+                  setSelection({ kind: "item", itemClass: i.className })
+                }
+              >
+                <span className={`dot form-${i.form}`} />
+                <span className="item-names">
+                  <span className="ru">{displayName(i)}</span>
+                  {i.nameRu && <span className="en">{i.name}</span>}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </aside>
+
       <main className="detail">
-        {selected ? (
-          <ItemDetail item={selected} />
-        ) : (
+        {selectedSystem && (
+          <SystemView
+            system={selectedSystem}
+            onChange={updateSystem}
+            onDelete={() => deleteSystem(selectedSystem.id)}
+          />
+        )}
+        {selectedItem && <ItemDetail item={selectedItem} />}
+        {!selectedSystem && !selectedItem && (
           <div className="placeholder">
-            <p>Выбери предмет в списке слева.</p>
-            <p className="hint">
-              Поиск работает по русскому и английскому названию или ClassName.
-            </p>
+            <p>Выбери систему или предмет в сайдбаре,</p>
+            <p>либо нажми «+», чтобы создать новую цепочку.</p>
           </div>
         )}
       </main>
