@@ -8,6 +8,10 @@ export interface FlowEntry {
   id: string;
   item: string | null;
   ratePerMin: number;
+  // Targets with `fill: true` are scaled by the solver to consume any source
+  // budget left after fixed-rate targets have been satisfied. Ignored on
+  // sources (no semantics there).
+  fill?: boolean;
 }
 
 export interface ProductionSystem {
@@ -103,6 +107,7 @@ function toFlow(raw: unknown): FlowEntry | null {
     id: typeof o.id === "string" ? o.id : cryptoRandomId(),
     item: typeof o.item === "string" || o.item === null ? o.item : null,
     ratePerMin: typeof o.ratePerMin === "number" ? o.ratePerMin : 60,
+    fill: o.fill === true ? true : undefined,
   };
 }
 

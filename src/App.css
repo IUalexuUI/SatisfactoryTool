@@ -158,6 +158,38 @@
   max-width: 600px;
 }
 
+.flow-row.with-fill {
+  grid-template-columns: 1fr auto auto auto;
+  max-width: 720px;
+}
+
+.fill-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+
+.fill-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.fill-toggle:hover {
+  color: var(--text);
+}
+
+.flow-rate:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .flow-rate-group {
   display: flex;
   align-items: center;

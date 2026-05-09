@@ -23,7 +23,11 @@ export function SystemView({ system, onChange, onDelete }: Props) {
     () => ({
       targets: system.targets
         .filter((t) => t.item)
-        .map((t) => ({ item: t.item as string, ratePerMin: t.ratePerMin })),
+        .map((t) => ({
+          item: t.item as string,
+          ratePerMin: t.ratePerMin,
+          fill: t.fill ?? false,
+        })),
       sources: system.sources
         .filter((s) => s.item)
         .map((s) => ({ item: s.item as string, ratePerMin: s.ratePerMin })),
@@ -66,8 +70,9 @@ export function SystemView({ system, onChange, onDelete }: Props) {
 
       <FlowEditor
         title="Конечные предметы"
-        helper="Что хочешь получать на выходе и в каком количестве"
+        helper="Что хочешь получать на выходе. Чекбокс «Заполнить» утилизирует остаток сырья — solver максимизирует скорость этой цели."
         flows={system.targets}
+        showFill
         onAdd={() => updateList("targets", (l) => [...l, emptyFlow()])}
         onUpdate={(idx, patch) =>
           updateList("targets", (l) =>
@@ -119,6 +124,7 @@ interface FlowEditorProps {
   filterFn?: (className: string) => boolean;
   emptyMessage?: string;
   ratePlaceholder?: string;
+  showFill?: boolean;
 }
 
 function FlowEditor({
@@ -131,6 +137,7 @@ function FlowEditor({
   filterFn,
   emptyMessage,
   ratePlaceholder,
+  showFill,
 }: FlowEditorProps) {
   return (
     <section className="flow-editor">
@@ -153,7 +160,10 @@ function FlowEditor({
         <p className="empty">{emptyMessage}</p>
       )}
       {flows.map((f, idx) => (
-        <div key={f.id} className="flow-row">
+        <div
+          key={f.id}
+          className={`flow-row ${showFill ? "with-fill" : ""}`}
+        >
           <ItemPicker
             value={f.item}
             onChange={(c) => onUpdate(idx, { item: c })}
@@ -170,10 +180,26 @@ function FlowEditor({
               onChange={(e) =>
                 onUpdate(idx, { ratePerMin: Number(e.target.value) || 0 })
               }
+              disabled={Boolean(f.fill)}
               aria-label={`Скорость, ${ratePlaceholder ?? "/мин"}`}
             />
             <span className="flow-rate-unit">{ratePlaceholder ?? "/мин"}</span>
           </div>
+          {showFill && (
+            <label
+              className="fill-toggle"
+              title="Использовать остаток сырья для максимизации этой цели"
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(f.fill)}
+                onChange={(e) =>
+                  onUpdate(idx, { fill: e.target.checked || undefined })
+                }
+              />
+              <span>Заполнить</span>
+            </label>
+          )}
           <button
             type="button"
             className="flow-remove"

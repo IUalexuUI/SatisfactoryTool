@@ -63,8 +63,15 @@ export interface Solution {
   warnings: string[];
 }
 
+export interface TargetSpec extends Flow {
+  // Fill-mode targets ignore their declared rate when sources are present;
+  // the solver scales them to consume whatever source budget remains after
+  // fixed-rate targets are satisfied.
+  fill?: boolean;
+}
+
 export interface SystemSpec {
-  targets: Flow[];
+  targets: TargetSpec[];
   sources: Flow[];
 }
 
@@ -284,15 +291,26 @@ function buildSolution(
   };
 }
 
-// Solve a system spec. If `sources` is empty, behaves like classic target mode
-// (snap5 clocking). If sources are declared, runs at fixed-100% clocks; if any
-// declared source is insufficient at the requested target rates, ALL targets
-// are scaled down proportionally so the bottleneck source is exactly met.
+// Solve a system spec.
+//
+// Cases:
+//   1. No sources, only fixed targets → snap5 clocking, full chain at
+//      requested rates.
+//   2. Sources declared, only fixed targets → fixed-100% clocks. If any source
+//      is insufficient, ALL fixed targets scale down proportionally so the
+//      bottleneck source is exactly met.
+//   3. Sources declared, fill targets present → fixed targets are satisfied
+//      first (with proportional scaling if needed). Each fill target then
+//      claims whatever source budget remains, processed in declaration order.
+//   4. No sources, fill targets present → fill flag has no semantics; we use
+//      the declared rate and warn.
 export function solveSystem(spec: SystemSpec): Solution {
-  const targets = spec.targets.filter((t) => t.item && t.ratePerMin > 0);
+  const allValid = spec.targets.filter(
+    (t) => t.item && (t.fill || t.ratePerMin > 0),
+  );
   const sources = spec.sources.filter((s) => s.item && s.ratePerMin > 0);
 
-  if (targets.length === 0) {
+  if (allValid.length === 0) {
     return {
       targets: [],
       requestedTargets: [],
@@ -311,41 +329,128 @@ export function solveSystem(spec: SystemSpec): Solution {
     };
   }
 
+  // No sources: fill is meaningless. Treat all targets at declared rates.
   if (sources.length === 0) {
-    return buildSolution(targets, targets, 1, sources, "snap5", []);
+    const fixed = allValid
+      .filter((t) => t.ratePerMin > 0)
+      .map((t) => ({ item: t.item, ratePerMin: t.ratePerMin }));
+    const warnings = allValid.some((t) => t.fill)
+      ? [
+          'Чекбокс «Заполнить» работает только при заданном сырье — цели использованы по введённой скорости.',
+        ]
+      : [];
+    return buildSolution(fixed, fixed, 1, sources, "snap5", warnings);
   }
 
-  // Probe: how much of each declared source the chain consumes at the
-  // requested target rates.
-  const probe = expandDemand(targets, "snap5");
-
-  let maxRatio = 0;
-  let limiting: Flow | null = null;
-  for (const src of sources) {
-    const consumed = probe.rawInputs.get(src.item) ?? 0;
-    if (consumed <= 0) continue;
-    const ratio = consumed / src.ratePerMin;
-    if (ratio > maxRatio) {
-      maxRatio = ratio;
-      limiting = src;
-    }
-  }
+  // ---- source-constrained branch ----
+  const fixedTargets = allValid
+    .filter((t) => !t.fill)
+    .map((t) => ({ item: t.item, ratePerMin: t.ratePerMin }));
+  const fillTargets = allValid.filter((t) => t.fill);
 
   const warnings: string[] = [];
   let scale = 1;
-  if (maxRatio > 1 && limiting) {
-    scale = 1 / maxRatio;
-    warnings.push(
-      `Цепочка масштабирована до ${(scale * 100).toFixed(1)}% запрошенного из-за лимита по «${itemName(limiting.item)}».`,
-    );
+  let achievedFixed: Flow[] = fixedTargets;
+
+  // Phase 1: ensure fixed targets fit in the source budget; scale them down
+  // proportionally if not.
+  if (fixedTargets.length > 0) {
+    const probe = expandDemand(fixedTargets, "snap5");
+    let maxRatio = 0;
+    let limiting: Flow | null = null;
+    for (const src of sources) {
+      const consumed = probe.rawInputs.get(src.item) ?? 0;
+      if (consumed <= 0) continue;
+      const ratio = consumed / src.ratePerMin;
+      if (ratio > maxRatio) {
+        maxRatio = ratio;
+        limiting = src;
+      }
+    }
+    if (maxRatio > 1 && limiting) {
+      scale = 1 / maxRatio;
+      warnings.push(
+        `Фиксированные цели масштабированы до ${(scale * 100).toFixed(1)}% запрошенного из-за лимита по «${itemName(limiting.item)}».`,
+      );
+      achievedFixed = fixedTargets.map((t) => ({
+        item: t.item,
+        ratePerMin: t.ratePerMin * scale,
+      }));
+    }
   }
 
-  const achieved =
-    scale === 1
-      ? targets
-      : targets.map((t) => ({ item: t.item, ratePerMin: t.ratePerMin * scale }));
+  // Phase 2: compute remaining source budget after fixed targets.
+  const remaining = new Map<string, number>(
+    sources.map((s) => [s.item, s.ratePerMin]),
+  );
+  if (achievedFixed.length > 0) {
+    const fixedProbe = expandDemand(achievedFixed, "snap5");
+    for (const src of sources) {
+      const consumed = fixedProbe.rawInputs.get(src.item) ?? 0;
+      remaining.set(src.item, src.ratePerMin - consumed);
+    }
+  }
 
-  // When the user is mixing sources into the spec they're planning around
-  // hard input limits — keep clocks at 100% for predictability.
-  return buildSolution(achieved, targets, scale, sources, "fixed100", warnings);
+  // Phase 3: each fill target claims its share of the remaining budget,
+  // greedy in declaration order.
+  const achievedFill: Flow[] = [];
+  for (const fill of fillTargets) {
+    if (!fill.item) continue;
+    const probe = expandDemand([{ item: fill.item, ratePerMin: 1 }], "snap5");
+    let bestRate = Infinity;
+    let usesAnyDeclaredSource = false;
+    let exhaustedSource: string | null = null;
+    for (const src of sources) {
+      const unit = probe.rawInputs.get(src.item) ?? 0;
+      if (unit <= 0) continue;
+      usesAnyDeclaredSource = true;
+      const rem = remaining.get(src.item) ?? 0;
+      if (rem <= 1e-9) {
+        bestRate = 0;
+        exhaustedSource = src.item;
+        break;
+      }
+      const max = rem / unit;
+      if (max < bestRate) bestRate = max;
+    }
+    if (!usesAnyDeclaredSource) {
+      warnings.push(
+        `«${itemName(fill.item)}» не использует заданное сырьё — оставлено ${fill.ratePerMin}/мин.`,
+      );
+      bestRate = fill.ratePerMin;
+    }
+    if (!Number.isFinite(bestRate)) {
+      bestRate = fill.ratePerMin;
+    }
+    if (bestRate <= 1e-9) {
+      warnings.push(
+        `Не хватило сырья на «${itemName(fill.item)}»${exhaustedSource ? ` (исчерпано «${itemName(exhaustedSource)}»)` : ""}.`,
+      );
+      continue;
+    }
+    const filled: Flow = { item: fill.item, ratePerMin: bestRate };
+    achievedFill.push(filled);
+
+    // Subtract this fill target's consumption from the remaining budget so
+    // subsequent fill targets see less.
+    const filledProbe = expandDemand([filled], "snap5");
+    for (const src of sources) {
+      const consumed = filledProbe.rawInputs.get(src.item) ?? 0;
+      remaining.set(src.item, (remaining.get(src.item) ?? 0) - consumed);
+    }
+  }
+
+  const requested: Flow[] = allValid.map((t) => ({
+    item: t.item,
+    ratePerMin: t.ratePerMin,
+  }));
+  const allAchieved = [...achievedFixed, ...achievedFill];
+  return buildSolution(
+    allAchieved,
+    requested,
+    scale,
+    sources,
+    "fixed100",
+    warnings,
+  );
 }
