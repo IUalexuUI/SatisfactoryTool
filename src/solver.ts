@@ -51,6 +51,16 @@ export interface SourceUsage {
   utilisation: number;
 }
 
+// Structured warnings — the View formats them with the active language. Item
+// references are stored as className IDs; the View resolves names.
+export type SolverWarning =
+  | { code: "fixed-scaled"; percent: number; itemId: string }
+  | { code: "chain-scaled"; percent: number; itemId: string }
+  | { code: "fill-requires-source" }
+  | { code: "fill-no-source"; itemId: string; rate: number }
+  | { code: "not-enough-source"; itemId: string; exhaustedId?: string }
+  | { code: "iteration-limit"; n: number };
+
 export interface Solution {
   targets: Flow[]; // achieved rates (may be < requested if scaled down)
   requestedTargets: Flow[]; // what the user asked for
@@ -60,7 +70,7 @@ export interface Solution {
   sourceUsage: SourceUsage[]; // declared sources with consumption
   byproducts: Flow[];
   totalPowerMW: number;
-  warnings: string[];
+  warnings: SolverWarning[];
 }
 
 export interface TargetSpec extends Flow {
@@ -142,12 +152,12 @@ function expandDemand(
   steps: ProductionStep[];
   rawInputs: Map<string, number>;
   byproducts: Map<string, number>;
-  warnings: string[];
+  warnings: SolverWarning[];
 } {
   const stepsByRecipe = new Map<string, ProductionStep>();
   const rawInputs = new Map<string, number>();
   const byproductCredits = new Map<string, number>();
-  const warnings: string[] = [];
+  const warnings: SolverWarning[] = [];
 
   const demand = new Map<string, number>();
   for (const t of initialDemand) {
@@ -159,9 +169,7 @@ function expandDemand(
   let iter = 0;
   while (demand.size) {
     if (++iter > MAX_ITERATIONS) {
-      warnings.push(
-        `Превышен лимит итераций (${MAX_ITERATIONS}) — возможен цикл в рецептах.`,
-      );
+      warnings.push({ code: "iteration-limit", n: MAX_ITERATIONS });
       break;
     }
 
@@ -238,7 +246,6 @@ function expandDemand(
 }
 
 const itemKey = (c: string) => items[c]?.nameRu ?? items[c]?.name ?? c;
-const itemName = (c: string) => items[c]?.nameRu ?? items[c]?.name ?? c;
 const collator = new Intl.Collator("ru", { sensitivity: "base" });
 
 // Wraps expandDemand and packages a Solution. `clockMode` determines whether
@@ -249,7 +256,7 @@ function buildSolution(
   scale: number,
   declaredSources: Flow[],
   clockMode: ClockMode,
-  extraWarnings: string[],
+  extraWarnings: SolverWarning[],
 ): Solution {
   const expansion = expandDemand(achievedTargets, clockMode);
 
@@ -334,10 +341,8 @@ export function solveSystem(spec: SystemSpec): Solution {
     const fixed = allValid
       .filter((t) => t.ratePerMin > 0)
       .map((t) => ({ item: t.item, ratePerMin: t.ratePerMin }));
-    const warnings = allValid.some((t) => t.fill)
-      ? [
-          'Чекбокс «Заполнить» работает только при заданном сырье — цели использованы по введённой скорости.',
-        ]
+    const warnings: SolverWarning[] = allValid.some((t) => t.fill)
+      ? [{ code: "fill-requires-source" }]
       : [];
     return buildSolution(fixed, fixed, 1, sources, "snap5", warnings);
   }
@@ -348,7 +353,7 @@ export function solveSystem(spec: SystemSpec): Solution {
     .map((t) => ({ item: t.item, ratePerMin: t.ratePerMin }));
   const fillTargets = allValid.filter((t) => t.fill);
 
-  const warnings: string[] = [];
+  const warnings: SolverWarning[] = [];
   let scale = 1;
   let achievedFixed: Flow[] = fixedTargets;
 
@@ -369,9 +374,11 @@ export function solveSystem(spec: SystemSpec): Solution {
     }
     if (maxRatio > 1 && limiting) {
       scale = 1 / maxRatio;
-      warnings.push(
-        `Фиксированные цели масштабированы до ${(scale * 100).toFixed(1)}% запрошенного из-за лимита по «${itemName(limiting.item)}».`,
-      );
+      warnings.push({
+        code: "fixed-scaled",
+        percent: scale * 100,
+        itemId: limiting.item,
+      });
       achievedFixed = fixedTargets.map((t) => ({
         item: t.item,
         ratePerMin: t.ratePerMin * scale,
@@ -432,9 +439,11 @@ export function solveSystem(spec: SystemSpec): Solution {
   // 3a: initial equal allocation.
   const fillRates: number[] = fillProbes.map((fp, i) => {
     if (!usesAnySource[i]) {
-      warnings.push(
-        `«${itemName(fp.target.item)}» не использует заданное сырьё — оставлено ${fp.target.ratePerMin}/мин.`,
-      );
+      warnings.push({
+        code: "fill-no-source",
+        itemId: fp.target.item,
+        rate: fp.target.ratePerMin,
+      });
       return fp.target.ratePerMin;
     }
     let rate = Infinity;
@@ -491,7 +500,10 @@ export function solveSystem(spec: SystemSpec): Solution {
     const rate = fillRates[i];
     if (rate <= 1e-9) {
       if (usesAnySource[i]) {
-        warnings.push(`Не хватило сырья на «${itemName(fp.target.item)}».`);
+        warnings.push({
+          code: "not-enough-source",
+          itemId: fp.target.item,
+        });
       }
       continue;
     }

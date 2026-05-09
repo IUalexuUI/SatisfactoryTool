@@ -6,6 +6,7 @@ import {
   type FlowEntry,
   type ProductionSystem,
 } from "../systems";
+import { useI18n, format } from "../i18n/index.tsx";
 import { ItemPicker } from "./ItemPicker";
 import { SolutionView } from "./SolutionView";
 
@@ -19,14 +20,16 @@ const isRawResource = (className: string) =>
   items[className]?.kind === "FGResourceDescriptor";
 
 export function SystemView({ system, onChange, onDelete }: Props) {
+  const { t } = useI18n();
+
   const spec: SystemSpec = useMemo(
     () => ({
       targets: system.targets
-        .filter((t) => t.item)
-        .map((t) => ({
-          item: t.item as string,
-          ratePerMin: t.ratePerMin,
-          fill: t.fill ?? false,
+        .filter((tg) => tg.item)
+        .map((tg) => ({
+          item: tg.item as string,
+          ratePerMin: tg.ratePerMin,
+          fill: tg.fill ?? false,
         })),
       sources: system.sources
         .filter((s) => s.item)
@@ -55,22 +58,24 @@ export function SystemView({ system, onChange, onDelete }: Props) {
           type="text"
           value={system.name}
           onChange={(e) => onChange({ ...system, name: e.target.value })}
-          aria-label="Название системы"
+          aria-label={t.system.nameAria}
         />
         <button
           className="system-delete"
           type="button"
           onClick={() => {
-            if (confirm(`Удалить систему «${system.name}»?`)) onDelete();
+            if (confirm(format(t.system.confirmDelete, { name: system.name }))) {
+              onDelete();
+            }
           }}
         >
-          Удалить
+          {t.system.delete}
         </button>
       </header>
 
       <FlowEditor
-        title="Конечные предметы"
-        helper="Что хочешь получать на выходе. Чекбокс «Заполнить» утилизирует остаток сырья — solver максимизирует скорость этой цели."
+        title={t.system.targets}
+        helper={t.system.targetsHelper}
         flows={system.targets}
         showFill
         onAdd={() => updateList("targets", (l) => [...l, emptyFlow()])}
@@ -82,12 +87,12 @@ export function SystemView({ system, onChange, onDelete }: Props) {
         onRemove={(idx) =>
           updateList("targets", (l) => l.filter((_, i) => i !== idx))
         }
-        ratePlaceholder="шт/мин"
+        unit={t.system.unitItems}
       />
 
       <FlowEditor
-        title="Сырьё (необязательно)"
-        helper="Если задано — solver масштабирует выход под доступное сырьё. Здания работают на 100%."
+        title={t.system.sources}
+        helper={t.system.sourcesHelper}
         flows={system.sources}
         onAdd={() => updateList("sources", (l) => [...l, emptyFlow()])}
         onUpdate={(idx, patch) =>
@@ -99,13 +104,11 @@ export function SystemView({ system, onChange, onDelete }: Props) {
           updateList("sources", (l) => l.filter((_, i) => i !== idx))
         }
         filterFn={isRawResource}
-        emptyMessage="Сырьё не ограничено — добавь «+», если хочешь задать лимит"
-        ratePlaceholder="ед/мин"
+        emptyMessage={t.system.sourcesEmpty}
+        unit={t.system.unitRaw}
       />
 
-      {!solution && (
-        <p className="empty pad">Добавь конечный предмет, чтобы рассчитать цепочку.</p>
-      )}
+      {!solution && <p className="empty pad">{t.system.needTarget}</p>}
 
       {solution && solution.targets.length > 0 && (
         <SolutionView solution={solution} />
@@ -123,7 +126,7 @@ interface FlowEditorProps {
   onRemove: (index: number) => void;
   filterFn?: (className: string) => boolean;
   emptyMessage?: string;
-  ratePlaceholder?: string;
+  unit?: string;
   showFill?: boolean;
 }
 
@@ -136,9 +139,11 @@ function FlowEditor({
   onRemove,
   filterFn,
   emptyMessage,
-  ratePlaceholder,
+  unit,
   showFill,
 }: FlowEditorProps) {
+  const { t } = useI18n();
+  const unitLabel = unit ?? t.units.perMin;
   return (
     <section className="flow-editor">
       <header className="flow-editor-head">
@@ -150,8 +155,8 @@ function FlowEditor({
           type="button"
           className="add-btn small"
           onClick={onAdd}
-          aria-label={`Добавить в «${title}»`}
-          title="Добавить"
+          aria-label={t.system.add}
+          title={t.system.add}
         >
           +
         </button>
@@ -168,7 +173,6 @@ function FlowEditor({
             value={f.item}
             onChange={(c) => onUpdate(idx, { item: c })}
             filterFn={filterFn}
-            placeholder="Выбери предмет…"
           />
           <div className="flow-rate-group">
             <input
@@ -181,15 +185,12 @@ function FlowEditor({
                 onUpdate(idx, { ratePerMin: Number(e.target.value) || 0 })
               }
               disabled={Boolean(f.fill)}
-              aria-label={`Скорость, ${ratePlaceholder ?? "/мин"}`}
+              aria-label={format(t.system.rateAria, { unit: unitLabel })}
             />
-            <span className="flow-rate-unit">{ratePlaceholder ?? "/мин"}</span>
+            <span className="flow-rate-unit">{unitLabel}</span>
           </div>
           {showFill && (
-            <label
-              className="fill-toggle"
-              title="Использовать остаток сырья для максимизации этой цели"
-            >
+            <label className="fill-toggle" title={t.system.fillTooltip}>
               <input
                 type="checkbox"
                 checked={Boolean(f.fill)}
@@ -197,15 +198,15 @@ function FlowEditor({
                   onUpdate(idx, { fill: e.target.checked || undefined })
                 }
               />
-              <span>Заполнить</span>
+              <span>{t.system.fillLabel}</span>
             </label>
           )}
           <button
             type="button"
             className="flow-remove"
             onClick={() => onRemove(idx)}
-            aria-label="Удалить"
-            title="Удалить"
+            aria-label={t.system.remove}
+            title={t.system.remove}
           >
             ×
           </button>

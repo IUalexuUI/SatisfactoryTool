@@ -1,15 +1,16 @@
 import { useMemo, useState, useRef, useEffect } from "react";
-import { items, itemsList, displayName } from "../data";
+import { items, itemsList } from "../data";
+import { useI18n } from "../i18n/index.tsx";
 
 interface Props {
   value: string | null;
   onChange: (className: string) => void;
   placeholder?: string;
-  // Restrict picker to a subset (e.g. raw resources only). Defaults to all items.
   filterFn?: (className: string) => boolean;
 }
 
 export function ItemPicker({ value, onChange, placeholder, filterFn }: Props) {
+  const { t, name, lang } = useI18n();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -32,7 +33,6 @@ export function ItemPicker({ value, onChange, placeholder, filterFn }: Props) {
       .slice(0, 60);
   }, [baseList, query]);
 
-  // Close when clicking outside.
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
@@ -45,7 +45,7 @@ export function ItemPicker({ value, onChange, placeholder, filterFn }: Props) {
   }, [open]);
 
   const selected = value ? (items[value] ?? null) : null;
-  const inputValue = open ? query : selected ? displayName(selected) : "";
+  const inputValue = open ? query : selected ? name(selected) : "";
 
   return (
     <div className="picker" ref={wrapperRef}>
@@ -53,7 +53,7 @@ export function ItemPicker({ value, onChange, placeholder, filterFn }: Props) {
         type="text"
         className="picker-input"
         value={inputValue}
-        placeholder={placeholder ?? "Выбери предмет…"}
+        placeholder={placeholder ?? t.picker.placeholder}
         onFocus={() => {
           setQuery("");
           setOpen(true);
@@ -67,27 +67,30 @@ export function ItemPicker({ value, onChange, placeholder, filterFn }: Props) {
       {open && (
         <div className="picker-dropdown">
           {filtered.length === 0 && (
-            <div className="picker-empty">Ничего не найдено</div>
+            <div className="picker-empty">{t.picker.empty}</div>
           )}
-          {filtered.map((i) => (
-            <button
-              key={i.className}
-              type="button"
-              className="picker-item"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onChange(i.className);
-                setOpen(false);
-                setQuery("");
-              }}
-            >
-              <span className={`dot form-${i.form}`} />
-              <span className="picker-names">
-                <span className="ru">{displayName(i)}</span>
-                {i.nameRu && <span className="en">{i.name}</span>}
-              </span>
-            </button>
-          ))}
+          {filtered.map((i) => {
+            const sub = lang === "ru" ? i.name : i.nameRu;
+            return (
+              <button
+                key={i.className}
+                type="button"
+                className="picker-item"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(i.className);
+                  setOpen(false);
+                  setQuery("");
+                }}
+              >
+                <span className={`dot form-${i.form}`} />
+                <span className="picker-names">
+                  <span className="ru">{name(i)}</span>
+                  {sub && sub !== name(i) && <span className="en">{sub}</span>}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
