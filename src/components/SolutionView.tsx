@@ -79,9 +79,11 @@ function FlowList({ flows, empty }: { flows: Flow[]; empty: string }) {
 export function SolutionView({
   solution,
   targetLabel,
+  mode = "target",
 }: {
   solution: Solution;
   targetLabel: string;
+  mode?: "target" | "source";
 }) {
   const totalMachines = solution.steps.reduce((sum, s) => sum + s.machines, 0);
 
@@ -89,7 +91,9 @@ export function SolutionView({
     <>
       <section className="solution-summary">
         <div className="summary-item">
-          <div className="summary-label">Цель</div>
+          <div className="summary-label">
+            {mode === "source" ? "Макс. выход" : "Цель"}
+          </div>
           <div className="summary-value">
             {formatNumber(solution.target.ratePerMin)}/мин {targetLabel}
           </div>

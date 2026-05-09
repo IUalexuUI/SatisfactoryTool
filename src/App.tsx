@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { items, itemsList, displayName, meta } from "./data";
 import {
   loadSystems,
-  newSystem,
+  newTargetSystem,
   saveSystems,
   type ProductionSystem,
 } from "./systems";
@@ -14,6 +14,17 @@ type Selection =
   | { kind: "none" }
   | { kind: "item"; itemClass: string }
   | { kind: "system"; systemId: string };
+
+function systemSummary(s: ProductionSystem): string {
+  if (s.mode === "target") {
+    const t = s.targetItem ? items[s.targetItem] : null;
+    return t ? `${s.targetRatePerMin}/мин · ${displayName(t)}` : "не настроена";
+  }
+  const src = s.sourceItem ? items[s.sourceItem] : null;
+  const tgt = s.targetItem ? items[s.targetItem] : null;
+  if (!src || !tgt) return "не настроена";
+  return `${s.sourceRatePerMin} ${displayName(src)} → ${displayName(tgt)}`;
+}
 
 export default function App() {
   const [systems, setSystems] = useState<ProductionSystem[]>(() => loadSystems());
@@ -43,7 +54,7 @@ export default function App() {
     selection.kind === "item" ? (items[selection.itemClass] ?? null) : null;
 
   function addSystem() {
-    const sys = newSystem();
+    const sys = newTargetSystem();
     setSystems((prev) => [...prev, sys]);
     setSelection({ kind: "system", systemId: sys.id });
   }
@@ -89,9 +100,9 @@ export default function App() {
             </div>
           )}
           {systems.map((s) => {
-            const target = s.targetItem ? items[s.targetItem] : null;
             const isActive =
               selection.kind === "system" && selection.systemId === s.id;
+            const summary = systemSummary(s);
             return (
               <button
                 key={s.id}
@@ -99,12 +110,13 @@ export default function App() {
                 className={`system-row ${isActive ? "is-active" : ""}`}
                 onClick={() => setSelection({ kind: "system", systemId: s.id })}
               >
-                <span className="system-name-label">{s.name}</span>
-                <span className="system-target">
-                  {target
-                    ? `${s.targetRatePerMin}/мин · ${displayName(target)}`
-                    : "не настроена"}
+                <span className="system-name-label">
+                  <span className={`mode-tag mode-${s.mode}`}>
+                    {s.mode === "target" ? "ЦЕЛЬ" : "ИСТ"}
+                  </span>
+                  {s.name}
                 </span>
+                <span className="system-target">{summary}</span>
               </button>
             );
           })}

@@ -121,6 +121,55 @@
   font-size: 13px;
   color: var(--text-strong);
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mode-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+}
+
+.mode-tag.mode-target {
+  background: rgba(255, 140, 66, 0.15);
+  color: var(--accent);
+}
+
+.mode-tag.mode-source {
+  background: rgba(78, 160, 255, 0.15);
+  color: var(--liquid);
+}
+
+.mode-switcher {
+  display: inline-flex;
+  gap: 0;
+  margin-bottom: 16px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.mode-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 4px;
+  color: var(--text-dim);
+}
+
+.mode-btn:hover {
+  color: var(--text);
+}
+
+.mode-btn.is-active {
+  background: var(--accent);
+  color: white;
 }
 
 .system-target {

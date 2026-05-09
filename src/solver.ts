@@ -97,10 +97,16 @@ function snapClockPercent(rawFraction: number): number {
   return Math.min(snapped, 100);
 }
 
+// `snap5` snaps clock UP to nearest 5%; minimal capacity headroom.
+// `fixed100` runs every machine at 100% (capacity exceeds demand — input-limited
+//   chains effectively under-produce, but the user has chosen to plan this way).
+export type ClockMode = "snap5" | "fixed100";
+
 function physicalConfig(
   cyclesPerMin: number,
   recipe: Recipe,
   building: Building | null,
+  clockMode: ClockMode,
 ): {
   effectiveMachines: number;
   machines: number;
@@ -112,8 +118,8 @@ function physicalConfig(
   if (machines === 0) {
     return { effectiveMachines: 0, machines: 0, clockPercent: 0, powerMW: 0 };
   }
-  const rawClock = effective / machines;
-  const clockPercent = snapClockPercent(rawClock);
+  const clockPercent =
+    clockMode === "fixed100" ? 100 : snapClockPercent(effective / machines);
   if (!building) {
     return { effectiveMachines: effective, machines, clockPercent, powerMW: 0 };
   }
@@ -133,6 +139,7 @@ const MAX_ITERATIONS = 5000;
 export function solveTarget(
   targetItem: string,
   targetRatePerMin: number,
+  clockMode: ClockMode = "snap5",
 ): Solution {
   const stepsByRecipe = new Map<string, ProductionStep>();
   const rawInputs = new Map<string, number>();
@@ -189,7 +196,7 @@ export function solveTarget(
     const newCycles = (existing?.cyclesPerMin ?? 0) + deltaCycles;
     const buildingClass = recipe.producedIn[0] ?? null;
     const building = buildingClass ? (buildings[buildingClass] ?? null) : null;
-    const phys = physicalConfig(newCycles, recipe, building);
+    const phys = physicalConfig(newCycles, recipe, building, clockMode);
 
     stepsByRecipe.set(recipe.className, {
       recipe,
@@ -250,6 +257,50 @@ export function solveTarget(
     rawInputs: rawInputsList,
     byproducts,
     totalPowerMW,
+    warnings,
+  };
+}
+
+// Source mode: given a fixed supply of one raw input, compute the chain at
+// fixed-100% clock and the maximum sustainable target rate.
+//
+// We probe the chain with a unit-rate target solve to discover how much of
+// the source resource a single unit of the target consumes, then scale.
+// All other raw resources required by the chain are reported as additional
+// inputs the player must arrange — they are not constraints here.
+export function solveSource(
+  sourceItem: string,
+  sourceRatePerMin: number,
+  targetItem: string,
+): Solution {
+  const itemName = (c: string) =>
+    items[c]?.nameRu ?? items[c]?.name ?? c;
+
+  if (sourceRatePerMin <= 0) {
+    return emptySolution(targetItem, [
+      "Скорость подачи сырья должна быть больше нуля.",
+    ]);
+  }
+
+  const probe = solveTarget(targetItem, 1, "snap5");
+  const sourceUsage = probe.rawInputs.find((r) => r.item === sourceItem);
+  if (!sourceUsage || sourceUsage.ratePerMin <= 0) {
+    return emptySolution(targetItem, [
+      `«${itemName(targetItem)}» не использует «${itemName(sourceItem)}» в качестве сырья.`,
+    ]);
+  }
+
+  const targetRate = sourceRatePerMin / sourceUsage.ratePerMin;
+  return solveTarget(targetItem, targetRate, "fixed100");
+}
+
+function emptySolution(targetItem: string, warnings: string[]): Solution {
+  return {
+    target: { item: targetItem, ratePerMin: 0 },
+    steps: [],
+    rawInputs: [],
+    byproducts: [],
+    totalPowerMW: 0,
     warnings,
   };
 }
