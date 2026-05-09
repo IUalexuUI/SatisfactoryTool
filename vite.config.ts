@@ -1,7 +1,10 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
-// https://vite.dev/config/
-export default defineConfig({
+// GitHub Pages serves the site at https://<user>.github.io/SatisfactoryTool/,
+// so production assets must be prefixed with the repo path. Dev server
+// keeps using "/" so `npm run dev` works at http://localhost:5173/.
+export default defineConfig(({ command }) => ({
   plugins: [react()],
-})
+  base: command === "build" ? "/SatisfactoryTool/" : "/",
+}));
