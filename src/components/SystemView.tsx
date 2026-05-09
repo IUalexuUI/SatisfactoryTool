@@ -169,8 +169,7 @@ function FlowEditor({
             onChange={(e) =>
               onUpdate(idx, { ratePerMin: Number(e.target.value) || 0 })
             }
-            placeholder={ratePlaceholder}
-            aria-label="Скорость"
+            aria-label={`Скорость, ${ratePlaceholder ?? "/мин"}`}
           />
           <span className="flow-rate-unit">{ratePlaceholder ?? "/мин"}</span>
           <button

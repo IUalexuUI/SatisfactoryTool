@@ -33,7 +33,7 @@ function StepCard({ step }: { step: ProductionStep }) {
           <span className="big">{step.machines}</span>
           <span className="times">×</span>
           <span className="building">{buildingName}</span>
-          <span className="clock">@ {step.clockPercent}%</span>
+          <span className="clock">такт {step.clockPercent}%</span>
         </div>
         <div className="step-meta">
           <span className="recipe-name">{displayName(step.recipe)}</span>
