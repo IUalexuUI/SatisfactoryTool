@@ -151,20 +151,37 @@
 
 .flow-row {
   display: grid;
-  grid-template-columns: 1fr 110px auto auto;
-  gap: 8px;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
   align-items: center;
   margin-bottom: 6px;
   max-width: 600px;
 }
 
+.flow-rate-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .flow-rate {
-  width: 100%;
+  width: 80px;
+  text-align: right;
+  /* Hide native spinner arrows — typing in numbers is cleaner here */
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.flow-rate::-webkit-outer-spin-button,
+.flow-rate::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .flow-rate-unit {
   font-size: 12px;
   color: var(--text-dim);
+  white-space: nowrap;
 }
 
 .flow-remove {

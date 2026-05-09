@@ -160,18 +160,20 @@ function FlowEditor({
             filterFn={filterFn}
             placeholder="Выбери предмет…"
           />
-          <input
-            type="number"
-            min="0"
-            step="any"
-            className="form-input flow-rate"
-            value={f.ratePerMin}
-            onChange={(e) =>
-              onUpdate(idx, { ratePerMin: Number(e.target.value) || 0 })
-            }
-            aria-label={`Скорость, ${ratePlaceholder ?? "/мин"}`}
-          />
-          <span className="flow-rate-unit">{ratePlaceholder ?? "/мин"}</span>
+          <div className="flow-rate-group">
+            <input
+              type="number"
+              min="0"
+              step="any"
+              className="form-input flow-rate"
+              value={f.ratePerMin}
+              onChange={(e) =>
+                onUpdate(idx, { ratePerMin: Number(e.target.value) || 0 })
+              }
+              aria-label={`Скорость, ${ratePlaceholder ?? "/мин"}`}
+            />
+            <span className="flow-rate-unit">{ratePlaceholder ?? "/мин"}</span>
+          </div>
           <button
             type="button"
             className="flow-remove"
