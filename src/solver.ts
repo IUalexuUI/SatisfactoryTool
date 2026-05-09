@@ -35,10 +35,18 @@ export interface ProductionStep {
   recipe: Recipe;
   building: Building | null;
   cyclesPerMin: number;
-  machineCount: number;
-  inputs: Flow[];
-  outputs: Flow[]; // includes byproducts
-  powerMW: number; // total for all machines in this step
+  // Continuous/ideal machine count to satisfy demand at 100% clock — useful as
+  // a diagnostic, but never built physically.
+  effectiveMachines: number;
+  // Whole machines actually constructed (ceil of effectiveMachines).
+  machines: number;
+  // Clock percent rounded UP to a multiple of CLOCK_SNAP_PERCENT (5%).
+  // 5..100. The physical setup runs slightly faster than strictly needed,
+  // capacity is left as headroom.
+  clockPercent: number;
+  inputs: Flow[]; // demand-side rates (logical, what the chain consumes)
+  outputs: Flow[]; // demand-side rates (includes byproducts)
+  powerMW: number; // total for all machines × clock^exponent
 }
 
 export interface Solution {
@@ -50,14 +58,14 @@ export interface Solution {
   warnings: string[];
 }
 
-// Average power per machine for a recipe in its building.
+// Average power per machine for a recipe in its building, at 100% clock.
 // Variable-power recipes encode their range as (constant, factor):
 //   power(x) = constant + factor * x, where x is uniform on [0, 1].
 //   so mean = constant + factor / 2.
 // For non-variable recipes (factor == 1, constant == 0 by default), use the
 // building's static powerMW or — for variable-power buildings without recipe-
 // specific encoding — the midpoint of the building's min/max range.
-function recipePowerMW(recipe: Recipe, building: Building): number {
+function basePowerMW(recipe: Recipe, building: Building): number {
   const { constant, factor } = recipe.variablePower;
   const recipeOverridesPower = constant !== 0 || factor !== 1;
   if (recipeOverridesPower) {
@@ -67,6 +75,57 @@ function recipePowerMW(recipe: Recipe, building: Building): number {
     return (building.variablePower.min + building.variablePower.max) / 2;
   }
   return building.powerMW;
+}
+
+// Clock rate snapping. Players can only configure clocks in 5% increments
+// in the game UI (and round numbers tend to be the practical defaults).
+const CLOCK_SNAP_PERCENT = 5;
+const CEIL_EPSILON = 1e-6;
+
+function ceilWhole(x: number): number {
+  return Math.ceil(x - CEIL_EPSILON);
+}
+
+function snapClockPercent(rawFraction: number): number {
+  if (rawFraction <= 0) return 0;
+  // Round UP to the nearest multiple of CLOCK_SNAP_PERCENT.
+  const stepsNeeded = Math.ceil(
+    (rawFraction * 100) / CLOCK_SNAP_PERCENT - CEIL_EPSILON,
+  );
+  const snapped = stepsNeeded * CLOCK_SNAP_PERCENT;
+  // Don't auto-overclock past 100% — that would require power shards.
+  return Math.min(snapped, 100);
+}
+
+function physicalConfig(
+  cyclesPerMin: number,
+  recipe: Recipe,
+  building: Building | null,
+): {
+  effectiveMachines: number;
+  machines: number;
+  clockPercent: number;
+  powerMW: number;
+} {
+  const effective = (cyclesPerMin * recipe.durationSec) / 60;
+  const machines = Math.max(ceilWhole(effective), effective > 0 ? 1 : 0);
+  if (machines === 0) {
+    return { effectiveMachines: 0, machines: 0, clockPercent: 0, powerMW: 0 };
+  }
+  const rawClock = effective / machines;
+  const clockPercent = snapClockPercent(rawClock);
+  if (!building) {
+    return { effectiveMachines: effective, machines, clockPercent, powerMW: 0 };
+  }
+  const base = basePowerMW(recipe, building);
+  const clockFrac = clockPercent / 100;
+  const powerPerMachine = base * Math.pow(clockFrac, building.powerExponent);
+  return {
+    effectiveMachines: effective,
+    machines,
+    clockPercent,
+    powerMW: powerPerMachine * machines,
+  };
 }
 
 const MAX_ITERATIONS = 5000;
@@ -130,15 +189,16 @@ export function solveTarget(
     const newCycles = (existing?.cyclesPerMin ?? 0) + deltaCycles;
     const buildingClass = recipe.producedIn[0] ?? null;
     const building = buildingClass ? (buildings[buildingClass] ?? null) : null;
-    const machineCount = (newCycles * recipe.durationSec) / 60;
-    const powerPerMachine = building ? recipePowerMW(recipe, building) : 0;
+    const phys = physicalConfig(newCycles, recipe, building);
 
     stepsByRecipe.set(recipe.className, {
       recipe,
       building,
       cyclesPerMin: newCycles,
-      machineCount,
-      powerMW: powerPerMachine * machineCount,
+      effectiveMachines: phys.effectiveMachines,
+      machines: phys.machines,
+      clockPercent: phys.clockPercent,
+      powerMW: phys.powerMW,
       inputs: recipe.ingredients.map((i) => ({
         item: i.item,
         ratePerMin: i.amount * newCycles,

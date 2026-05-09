@@ -18,9 +18,6 @@ function ItemLabel({ className }: { className: string }) {
 }
 
 function StepCard({ step }: { step: ProductionStep }) {
-  const machinesNeeded = Math.ceil(step.machineCount);
-  const clockPercent =
-    machinesNeeded > 0 ? (step.machineCount / machinesNeeded) * 100 : 0;
   const buildingName = step.building
     ? displayName(step.building)
     : (step.recipe.producedIn[0] ?? "—");
@@ -29,9 +26,10 @@ function StepCard({ step }: { step: ProductionStep }) {
     <article className={`step ${step.recipe.alternate ? "is-alt" : ""}`}>
       <header className="step-head">
         <div className="step-machine-count">
-          <span className="big">{formatNumber(step.machineCount, 3)}</span>
+          <span className="big">{step.machines}</span>
           <span className="times">×</span>
           <span className="building">{buildingName}</span>
+          <span className="clock">@ {step.clockPercent}%</span>
         </div>
         <div className="step-meta">
           <span className="recipe-name">{displayName(step.recipe)}</span>
@@ -39,7 +37,7 @@ function StepCard({ step }: { step: ProductionStep }) {
         </div>
       </header>
       <div className="step-hint">
-        Минимум {machinesNeeded} зданий @ {formatNumber(clockPercent, 1)}% такта
+        Идеально {formatNumber(step.effectiveMachines, 3)} зданий @ 100% — округлено вверх
       </div>
       <div className="step-flow">
         <ul className="flow-side">
@@ -85,10 +83,7 @@ export function SolutionView({
   solution: Solution;
   targetLabel: string;
 }) {
-  const totalMachines = solution.steps.reduce(
-    (sum, s) => sum + Math.ceil(s.machineCount),
-    0,
-  );
+  const totalMachines = solution.steps.reduce((sum, s) => sum + s.machines, 0);
 
   return (
     <>

@@ -575,6 +575,13 @@
   font-weight: 500;
 }
 
+.step-machine-count .clock {
+  color: var(--accent);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  margin-left: 6px;
+}
+
 .step-meta {
   display: flex;
   flex-direction: column;
