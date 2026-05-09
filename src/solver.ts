@@ -35,50 +35,52 @@ export interface ProductionStep {
   recipe: Recipe;
   building: Building | null;
   cyclesPerMin: number;
-  // Continuous/ideal machine count to satisfy demand at 100% clock — useful as
-  // a diagnostic, but never built physically.
   effectiveMachines: number;
-  // Whole machines actually constructed (ceil of effectiveMachines).
   machines: number;
-  // Clock percent rounded UP to a multiple of CLOCK_SNAP_PERCENT (5%).
-  // 5..100. The physical setup runs slightly faster than strictly needed,
-  // capacity is left as headroom.
   clockPercent: number;
-  inputs: Flow[]; // demand-side rates (logical, what the chain consumes)
-  outputs: Flow[]; // demand-side rates (includes byproducts)
-  powerMW: number; // total for all machines × clock^exponent
+  inputs: Flow[];
+  outputs: Flow[];
+  powerMW: number;
+}
+
+export interface SourceUsage {
+  item: string;
+  available: number;
+  consumed: number;
+  // > 1 means we don't have enough; the chain will be scaled down.
+  utilisation: number;
 }
 
 export interface Solution {
-  target: Flow;
+  targets: Flow[]; // achieved rates (may be < requested if scaled down)
+  requestedTargets: Flow[]; // what the user asked for
+  scale: number; // 1.0 = at full request; < 1 = scaled down by source bottleneck
   steps: ProductionStep[];
-  rawInputs: Flow[]; // resources to extract
-  byproducts: Flow[]; // surplus outputs not consumed downstream
+  rawInputs: Flow[]; // resources the chain demands
+  sourceUsage: SourceUsage[]; // declared sources with consumption
+  byproducts: Flow[];
   totalPowerMW: number;
   warnings: string[];
 }
 
+export interface SystemSpec {
+  targets: Flow[];
+  sources: Flow[];
+}
+
 // Average power per machine for a recipe in its building, at 100% clock.
-// Variable-power recipes encode their range as (constant, factor):
-//   power(x) = constant + factor * x, where x is uniform on [0, 1].
-//   so mean = constant + factor / 2.
-// For non-variable recipes (factor == 1, constant == 0 by default), use the
-// building's static powerMW or — for variable-power buildings without recipe-
-// specific encoding — the midpoint of the building's min/max range.
 function basePowerMW(recipe: Recipe, building: Building): number {
   const { constant, factor } = recipe.variablePower;
   const recipeOverridesPower = constant !== 0 || factor !== 1;
-  if (recipeOverridesPower) {
-    return constant + factor / 2;
-  }
+  if (recipeOverridesPower) return constant + factor / 2;
   if (building.variablePower) {
     return (building.variablePower.min + building.variablePower.max) / 2;
   }
   return building.powerMW;
 }
 
-// Clock rate snapping. Players can only configure clocks in 5% increments
-// in the game UI (and round numbers tend to be the practical defaults).
+export type ClockMode = "snap5" | "fixed100";
+
 const CLOCK_SNAP_PERCENT = 5;
 const CEIL_EPSILON = 1e-6;
 
@@ -88,31 +90,18 @@ function ceilWhole(x: number): number {
 
 function snapClockPercent(rawFraction: number): number {
   if (rawFraction <= 0) return 0;
-  // Round UP to the nearest multiple of CLOCK_SNAP_PERCENT.
   const stepsNeeded = Math.ceil(
     (rawFraction * 100) / CLOCK_SNAP_PERCENT - CEIL_EPSILON,
   );
-  const snapped = stepsNeeded * CLOCK_SNAP_PERCENT;
-  // Don't auto-overclock past 100% — that would require power shards.
-  return Math.min(snapped, 100);
+  return Math.min(stepsNeeded * CLOCK_SNAP_PERCENT, 100);
 }
-
-// `snap5` snaps clock UP to nearest 5%; minimal capacity headroom.
-// `fixed100` runs every machine at 100% (capacity exceeds demand — input-limited
-//   chains effectively under-produce, but the user has chosen to plan this way).
-export type ClockMode = "snap5" | "fixed100";
 
 function physicalConfig(
   cyclesPerMin: number,
   recipe: Recipe,
   building: Building | null,
   clockMode: ClockMode,
-): {
-  effectiveMachines: number;
-  machines: number;
-  clockPercent: number;
-  powerMW: number;
-} {
+) {
   const effective = (cyclesPerMin * recipe.durationSec) / 60;
   const machines = Math.max(ceilWhole(effective), effective > 0 ? 1 : 0);
   if (machines === 0) {
@@ -136,19 +125,29 @@ function physicalConfig(
 
 const MAX_ITERATIONS = 5000;
 
-export function solveTarget(
-  targetItem: string,
-  targetRatePerMin: number,
-  clockMode: ClockMode = "snap5",
-): Solution {
+// Core expansion: given a set of demanded items × rates, recursively expand
+// using default recipes, aggregating cycles per recipe and crediting
+// byproducts. Returns the steps plus the raw input rates.
+function expandDemand(
+  initialDemand: Flow[],
+  clockMode: ClockMode,
+): {
+  steps: ProductionStep[];
+  rawInputs: Map<string, number>;
+  byproducts: Map<string, number>;
+  warnings: string[];
+} {
   const stepsByRecipe = new Map<string, ProductionStep>();
   const rawInputs = new Map<string, number>();
-  const byproductCredits = new Map<string, number>(); // available surplus
+  const byproductCredits = new Map<string, number>();
   const warnings: string[] = [];
 
-  // Aggregate demand still to satisfy.
   const demand = new Map<string, number>();
-  demand.set(targetItem, targetRatePerMin);
+  for (const t of initialDemand) {
+    if (t.ratePerMin > 0) {
+      demand.set(t.item, (demand.get(t.item) ?? 0) + t.ratePerMin);
+    }
+  }
 
   let iter = 0;
   while (demand.size) {
@@ -159,15 +158,12 @@ export function solveTarget(
       break;
     }
 
-    // Pop one demand entry.
     const entry = demand.entries().next().value;
     if (!entry) break;
     const [item, requestedRate] = entry;
     demand.delete(item);
-
     if (requestedRate <= 1e-9) continue;
 
-    // Try to satisfy from byproduct surplus first.
     let needed = requestedRate;
     const credit = byproductCredits.get(item) ?? 0;
     if (credit > 0) {
@@ -185,12 +181,10 @@ export function solveTarget(
 
     const productEntry = recipe.products.find((p) => p.item === item);
     if (!productEntry || productEntry.amount <= 0) {
-      // Should not happen — pickDefaultRecipe filters, but be safe.
       rawInputs.set(item, (rawInputs.get(item) ?? 0) + needed);
       continue;
     }
 
-    // Cycles per minute we need to add to satisfy the remaining demand.
     const deltaCycles = needed / productEntry.amount;
     const existing = stepsByRecipe.get(recipe.className);
     const newCycles = (existing?.cyclesPerMin ?? 0) + deltaCycles;
@@ -216,91 +210,142 @@ export function solveTarget(
       })),
     });
 
-    // Add delta-worth of ingredient demand.
     for (const ing of recipe.ingredients) {
-      const add = ing.amount * deltaCycles;
-      demand.set(ing.item, (demand.get(ing.item) ?? 0) + add);
+      demand.set(ing.item, (demand.get(ing.item) ?? 0) + ing.amount * deltaCycles);
     }
-
-    // Credit the delta-worth of byproducts (i.e. products other than `item`).
     for (const prod of recipe.products) {
       if (prod.item === item) continue;
-      const made = prod.amount * deltaCycles;
       byproductCredits.set(
         prod.item,
-        (byproductCredits.get(prod.item) ?? 0) + made,
+        (byproductCredits.get(prod.item) ?? 0) + prod.amount * deltaCycles,
       );
     }
   }
 
-  // Any remaining byproduct surplus that we didn't consume becomes output.
-  const byproducts: Flow[] = [];
-  for (const [item, rate] of byproductCredits) {
-    if (rate > 1e-6) byproducts.push({ item, ratePerMin: rate });
-  }
+  return {
+    steps: [...stepsByRecipe.values()],
+    rawInputs,
+    byproducts: byproductCredits,
+    warnings,
+  };
+}
 
-  const steps = [...stepsByRecipe.values()];
-  const rawInputsList: Flow[] = [...rawInputs.entries()].map(
+const itemKey = (c: string) => items[c]?.nameRu ?? items[c]?.name ?? c;
+const itemName = (c: string) => items[c]?.nameRu ?? items[c]?.name ?? c;
+const collator = new Intl.Collator("ru", { sensitivity: "base" });
+
+// Wraps expandDemand and packages a Solution. `clockMode` determines whether
+// machines are snapped to 5%-stepped underclocks or pinned at 100%.
+function buildSolution(
+  achievedTargets: Flow[],
+  requestedTargets: Flow[],
+  scale: number,
+  declaredSources: Flow[],
+  clockMode: ClockMode,
+  extraWarnings: string[],
+): Solution {
+  const expansion = expandDemand(achievedTargets, clockMode);
+
+  const rawList: Flow[] = [...expansion.rawInputs.entries()].map(
     ([item, ratePerMin]) => ({ item, ratePerMin }),
   );
-  const totalPowerMW = steps.reduce((sum, s) => sum + s.powerMW, 0);
+  rawList.sort((a, b) => collator.compare(itemKey(a.item), itemKey(b.item)));
 
-  // Sort raw inputs and byproducts by item display name for stable rendering.
-  const collator = new Intl.Collator("ru", { sensitivity: "base" });
-  const itemKey = (c: string) => items[c]?.nameRu ?? items[c]?.name ?? c;
-  rawInputsList.sort((a, b) => collator.compare(itemKey(a.item), itemKey(b.item)));
+  const byproducts: Flow[] = [];
+  for (const [item, rate] of expansion.byproducts) {
+    if (rate > 1e-6) byproducts.push({ item, ratePerMin: rate });
+  }
   byproducts.sort((a, b) => collator.compare(itemKey(a.item), itemKey(b.item)));
 
+  const sourceUsage: SourceUsage[] = declaredSources.map((src) => {
+    const consumed = expansion.rawInputs.get(src.item) ?? 0;
+    const utilisation = src.ratePerMin > 0 ? consumed / src.ratePerMin : 0;
+    return {
+      item: src.item,
+      available: src.ratePerMin,
+      consumed,
+      utilisation,
+    };
+  });
+  sourceUsage.sort((a, b) => collator.compare(itemKey(a.item), itemKey(b.item)));
+
+  const totalPowerMW = expansion.steps.reduce((sum, s) => sum + s.powerMW, 0);
+
   return {
-    target: { item: targetItem, ratePerMin: targetRatePerMin },
-    steps,
-    rawInputs: rawInputsList,
+    targets: achievedTargets,
+    requestedTargets,
+    scale,
+    steps: expansion.steps,
+    rawInputs: rawList,
+    sourceUsage,
     byproducts,
     totalPowerMW,
-    warnings,
+    warnings: [...extraWarnings, ...expansion.warnings],
   };
 }
 
-// Source mode: given a fixed supply of one raw input, compute the chain at
-// fixed-100% clock and the maximum sustainable target rate.
-//
-// We probe the chain with a unit-rate target solve to discover how much of
-// the source resource a single unit of the target consumes, then scale.
-// All other raw resources required by the chain are reported as additional
-// inputs the player must arrange — they are not constraints here.
-export function solveSource(
-  sourceItem: string,
-  sourceRatePerMin: number,
-  targetItem: string,
-): Solution {
-  const itemName = (c: string) =>
-    items[c]?.nameRu ?? items[c]?.name ?? c;
+// Solve a system spec. If `sources` is empty, behaves like classic target mode
+// (snap5 clocking). If sources are declared, runs at fixed-100% clocks; if any
+// declared source is insufficient at the requested target rates, ALL targets
+// are scaled down proportionally so the bottleneck source is exactly met.
+export function solveSystem(spec: SystemSpec): Solution {
+  const targets = spec.targets.filter((t) => t.item && t.ratePerMin > 0);
+  const sources = spec.sources.filter((s) => s.item && s.ratePerMin > 0);
 
-  if (sourceRatePerMin <= 0) {
-    return emptySolution(targetItem, [
-      "Скорость подачи сырья должна быть больше нуля.",
-    ]);
+  if (targets.length === 0) {
+    return {
+      targets: [],
+      requestedTargets: [],
+      scale: 1,
+      steps: [],
+      rawInputs: [],
+      sourceUsage: sources.map((s) => ({
+        item: s.item,
+        available: s.ratePerMin,
+        consumed: 0,
+        utilisation: 0,
+      })),
+      byproducts: [],
+      totalPowerMW: 0,
+      warnings: [],
+    };
   }
 
-  const probe = solveTarget(targetItem, 1, "snap5");
-  const sourceUsage = probe.rawInputs.find((r) => r.item === sourceItem);
-  if (!sourceUsage || sourceUsage.ratePerMin <= 0) {
-    return emptySolution(targetItem, [
-      `«${itemName(targetItem)}» не использует «${itemName(sourceItem)}» в качестве сырья.`,
-    ]);
+  if (sources.length === 0) {
+    return buildSolution(targets, targets, 1, sources, "snap5", []);
   }
 
-  const targetRate = sourceRatePerMin / sourceUsage.ratePerMin;
-  return solveTarget(targetItem, targetRate, "fixed100");
-}
+  // Probe: how much of each declared source the chain consumes at the
+  // requested target rates.
+  const probe = expandDemand(targets, "snap5");
 
-function emptySolution(targetItem: string, warnings: string[]): Solution {
-  return {
-    target: { item: targetItem, ratePerMin: 0 },
-    steps: [],
-    rawInputs: [],
-    byproducts: [],
-    totalPowerMW: 0,
-    warnings,
-  };
+  let maxRatio = 0;
+  let limiting: Flow | null = null;
+  for (const src of sources) {
+    const consumed = probe.rawInputs.get(src.item) ?? 0;
+    if (consumed <= 0) continue;
+    const ratio = consumed / src.ratePerMin;
+    if (ratio > maxRatio) {
+      maxRatio = ratio;
+      limiting = src;
+    }
+  }
+
+  const warnings: string[] = [];
+  let scale = 1;
+  if (maxRatio > 1 && limiting) {
+    scale = 1 / maxRatio;
+    warnings.push(
+      `Цепочка масштабирована до ${(scale * 100).toFixed(1)}% запрошенного из-за лимита по «${itemName(limiting.item)}».`,
+    );
+  }
+
+  const achieved =
+    scale === 1
+      ? targets
+      : targets.map((t) => ({ item: t.item, ratePerMin: t.ratePerMin * scale }));
+
+  // When the user is mixing sources into the spec they're planning around
+  // hard input limits — keep clocks at 100% for predictability.
+  return buildSolution(achieved, targets, scale, sources, "fixed100", warnings);
 }

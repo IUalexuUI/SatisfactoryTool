@@ -1,74 +1,33 @@
-// Production systems persisted in localStorage. Each system is a saved
-// planning scenario in one of two modes:
-//   - target: "I want X of item Y per minute" — solver computes inputs
-//   - source: "I have N of resource X per minute, what's the max output of Y?"
+// Production systems persisted in localStorage. Each system holds lists of
+// desired targets and (optionally) constrained sources. The solver decides
+// how to interpret them based on which lists are populated.
 
 const STORAGE_KEY = "satisfactory-tool/systems/v1";
 
-export type SystemMode = "target" | "source";
+export interface FlowEntry {
+  id: string;
+  item: string | null;
+  ratePerMin: number;
+}
 
-export interface BaseSystem {
+export interface ProductionSystem {
   id: string;
   name: string;
-  mode: SystemMode;
+  targets: FlowEntry[];
+  sources: FlowEntry[];
 }
 
-export interface TargetSystem extends BaseSystem {
-  mode: "target";
-  targetItem: string | null;
-  targetRatePerMin: number;
-}
-
-export interface SourceSystem extends BaseSystem {
-  mode: "source";
-  sourceItem: string | null;
-  sourceRatePerMin: number;
-  targetItem: string | null;
-}
-
-export type ProductionSystem = TargetSystem | SourceSystem;
-
-export function newTargetSystem(): TargetSystem {
+export function newSystem(): ProductionSystem {
   return {
     id: cryptoRandomId(),
     name: "Новая система",
-    mode: "target",
-    targetItem: null,
-    targetRatePerMin: 60,
+    targets: [emptyFlow()],
+    sources: [],
   };
 }
 
-export function newSourceSystem(): SourceSystem {
-  return {
-    id: cryptoRandomId(),
-    name: "Новая система",
-    mode: "source",
-    sourceItem: null,
-    sourceRatePerMin: 120,
-    targetItem: null,
-  };
-}
-
-// Convert a system between modes, preserving id/name and any reusable state.
-export function switchMode(s: ProductionSystem, mode: SystemMode): ProductionSystem {
-  if (s.mode === mode) return s;
-  if (mode === "target") {
-    return {
-      id: s.id,
-      name: s.name,
-      mode: "target",
-      targetItem: s.targetItem ?? null,
-      targetRatePerMin: 60,
-    };
-  }
-  return {
-    id: s.id,
-    name: s.name,
-    mode: "source",
-    sourceItem: null,
-    sourceRatePerMin: 120,
-    targetItem: s.targetItem ?? null,
-  };
+export function emptyFlow(): FlowEntry {
+  return { id: cryptoRandomId(), item: null, ratePerMin: 60 };
 }
 
 export function loadSystems(): ProductionSystem[] {
@@ -89,47 +48,66 @@ export function saveSystems(systems: ProductionSystem[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(systems));
   } catch {
-    // Storage may be full or disabled (private mode). Silently ignore —
-    // the in-memory state still works for the session.
+    // Storage may be full or disabled (private mode). Silently ignore.
   }
 }
 
-// Accept legacy schema (no `mode` field — was always target-mode) and the
-// current discriminated-union schema. Drops anything we can't recognise.
+// Migrate any prior schema to the current one. We have seen:
+//   - v1a: { id, name, targetItem, targetRatePerMin } (single target, no mode)
+//   - v1b: discriminated mode union — target/source variants
+//   - v1c: current — { id, name, targets[], sources[] }
 function migrate(raw: unknown): ProductionSystem | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   if (typeof o.id !== "string" || typeof o.name !== "string") return null;
 
-  const mode = o.mode === "source" ? "source" : "target";
-  if (mode === "target") {
+  // Already current schema?
+  if (Array.isArray(o.targets) && Array.isArray(o.sources)) {
     return {
       id: o.id,
       name: o.name,
-      mode: "target",
-      targetItem:
-        typeof o.targetItem === "string" || o.targetItem === null
-          ? o.targetItem
-          : null,
-      targetRatePerMin:
-        typeof o.targetRatePerMin === "number" ? o.targetRatePerMin : 60,
+      targets: (o.targets as unknown[]).map(toFlow).filter(notNull),
+      sources: (o.sources as unknown[]).map(toFlow).filter(notNull),
     };
   }
+
+  // Legacy: pull single target/source descriptors.
+  const targets: FlowEntry[] = [];
+  const sources: FlowEntry[] = [];
+
+  if ("targetItem" in o || "targetRatePerMin" in o) {
+    targets.push({
+      id: cryptoRandomId(),
+      item: typeof o.targetItem === "string" ? o.targetItem : null,
+      ratePerMin:
+        typeof o.targetRatePerMin === "number" ? o.targetRatePerMin : 60,
+    });
+  }
+  if (o.mode === "source") {
+    sources.push({
+      id: cryptoRandomId(),
+      item: typeof o.sourceItem === "string" ? o.sourceItem : null,
+      ratePerMin:
+        typeof o.sourceRatePerMin === "number" ? o.sourceRatePerMin : 120,
+    });
+  }
+  if (targets.length === 0) targets.push(emptyFlow());
+
+  return { id: o.id, name: o.name, targets, sources };
+}
+
+function toFlow(raw: unknown): FlowEntry | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
   return {
-    id: o.id,
-    name: o.name,
-    mode: "source",
-    sourceItem:
-      typeof o.sourceItem === "string" || o.sourceItem === null
-        ? o.sourceItem
-        : null,
-    sourceRatePerMin:
-      typeof o.sourceRatePerMin === "number" ? o.sourceRatePerMin : 120,
-    targetItem:
-      typeof o.targetItem === "string" || o.targetItem === null
-        ? o.targetItem
-        : null,
+    id: typeof o.id === "string" ? o.id : cryptoRandomId(),
+    item: typeof o.item === "string" || o.item === null ? o.item : null,
+    ratePerMin: typeof o.ratePerMin === "number" ? o.ratePerMin : 60,
   };
+}
+
+function notNull<T>(x: T | null): x is T {
+  return x !== null;
 }
 
 function cryptoRandomId(): string {

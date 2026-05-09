@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { items, itemsList, displayName, meta } from "./data";
 import {
   loadSystems,
-  newTargetSystem,
+  newSystem,
   saveSystems,
   type ProductionSystem,
 } from "./systems";
@@ -16,14 +16,19 @@ type Selection =
   | { kind: "system"; systemId: string };
 
 function systemSummary(s: ProductionSystem): string {
-  if (s.mode === "target") {
-    const t = s.targetItem ? items[s.targetItem] : null;
-    return t ? `${s.targetRatePerMin}/мин · ${displayName(t)}` : "не настроена";
-  }
-  const src = s.sourceItem ? items[s.sourceItem] : null;
-  const tgt = s.targetItem ? items[s.targetItem] : null;
-  if (!src || !tgt) return "не настроена";
-  return `${s.sourceRatePerMin} ${displayName(src)} → ${displayName(tgt)}`;
+  const ts = s.targets.filter((t) => t.item);
+  const ss = s.sources.filter((src) => src.item);
+  if (ts.length === 0) return "не настроена";
+  const head = ts
+    .slice(0, 2)
+    .map((t) => {
+      const it = items[t.item as string];
+      return `${t.ratePerMin} ${it ? displayName(it) : (t.item ?? "?")}`;
+    })
+    .join(", ");
+  const more = ts.length > 2 ? ` +${ts.length - 2}` : "";
+  const srcSuffix = ss.length > 0 ? ` ← ${ss.length} источ.` : "";
+  return head + more + srcSuffix;
 }
 
 export default function App() {
@@ -54,7 +59,7 @@ export default function App() {
     selection.kind === "item" ? (items[selection.itemClass] ?? null) : null;
 
   function addSystem() {
-    const sys = newTargetSystem();
+    const sys = newSystem();
     setSystems((prev) => [...prev, sys]);
     setSelection({ kind: "system", systemId: sys.id });
   }
@@ -110,12 +115,7 @@ export default function App() {
                 className={`system-row ${isActive ? "is-active" : ""}`}
                 onClick={() => setSelection({ kind: "system", systemId: s.id })}
               >
-                <span className="system-name-label">
-                  <span className={`mode-tag mode-${s.mode}`}>
-                    {s.mode === "target" ? "ЦЕЛЬ" : "ИСТ"}
-                  </span>
-                  {s.name}
-                </span>
+                <span className="system-name-label">{s.name}</span>
                 <span className="system-target">{summary}</span>
               </button>
             );

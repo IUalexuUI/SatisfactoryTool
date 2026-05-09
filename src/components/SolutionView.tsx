@@ -1,9 +1,13 @@
 import { items, displayName } from "../data";
-import type { Solution, ProductionStep, Flow } from "../solver";
+import type {
+  Solution,
+  ProductionStep,
+  Flow,
+  SourceUsage,
+} from "../solver";
 
 function formatNumber(n: number, decimals = 2): string {
   if (Math.abs(n) < 1e-9) return "0";
-  // Trim trailing zeros while respecting decimals limit.
   return Number(n.toFixed(decimals)).toString();
 }
 
@@ -76,30 +80,58 @@ function FlowList({ flows, empty }: { flows: Flow[]; empty: string }) {
   );
 }
 
-export function SolutionView({
-  solution,
-  targetLabel,
-  mode = "target",
-}: {
-  solution: Solution;
-  targetLabel: string;
-  mode?: "target" | "source";
-}) {
+function SourceUsageList({ sources }: { sources: SourceUsage[] }) {
+  if (sources.length === 0) return null;
+  return (
+    <ul className="flat-list">
+      {sources.map((s) => {
+        const pct = s.utilisation * 100;
+        const isFull = s.utilisation >= 0.999;
+        const statusClass =
+          s.utilisation > 1.0001
+            ? "over"
+            : isFull
+              ? "full"
+              : s.utilisation > 0
+                ? "partial"
+                : "unused";
+        return (
+          <li key={s.item} className={`source-row source-${statusClass}`}>
+            <ItemLabel className={s.item} />
+            <span className="ent-rate">
+              {formatNumber(s.consumed)}/{formatNumber(s.available)}
+              <span className="util">{formatNumber(pct, 1)}%</span>
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function SolutionView({ solution }: { solution: Solution }) {
   const totalMachines = solution.steps.reduce((sum, s) => sum + s.machines, 0);
+  const isScaledDown = solution.scale < 0.9999;
+  const targetsLine = solution.targets
+    .map((t) => `${formatNumber(t.ratePerMin)}/мин ${itemLabel(t.item)}`)
+    .join(" + ");
 
   return (
     <>
       <section className="solution-summary">
-        <div className="summary-item">
+        <div className="summary-item summary-targets">
           <div className="summary-label">
-            {mode === "source" ? "Макс. выход" : "Цель"}
+            {isScaledDown ? "Достижимо" : "Цели"}
           </div>
-          <div className="summary-value">
-            {formatNumber(solution.target.ratePerMin)}/мин {targetLabel}
-          </div>
+          <div className="summary-value">{targetsLine}</div>
+          {isScaledDown && (
+            <div className="summary-sub">
+              {(solution.scale * 100).toFixed(1)}% от запрошенного
+            </div>
+          )}
         </div>
         <div className="summary-item">
-          <div className="summary-label">Зданий (мин.)</div>
+          <div className="summary-label">Зданий</div>
           <div className="summary-value">{totalMachines}</div>
         </div>
         <div className="summary-item">
@@ -120,6 +152,15 @@ export function SolutionView({
             <div key={i} className="warning">⚠ {w}</div>
           ))}
         </div>
+      )}
+
+      {solution.sourceUsage.length > 0 && (
+        <section className="recipe-group">
+          <h3>
+            Источники <span className="count">{solution.sourceUsage.length}</span>
+          </h3>
+          <SourceUsageList sources={solution.sourceUsage} />
+        </section>
       )}
 
       <section className="recipe-group">
@@ -155,4 +196,9 @@ export function SolutionView({
       )}
     </>
   );
+}
+
+function itemLabel(className: string): string {
+  const it = items[className];
+  return it ? displayName(it) : className;
 }
