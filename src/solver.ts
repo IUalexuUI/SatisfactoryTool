@@ -145,9 +145,18 @@ const MAX_ITERATIONS = 5000;
 // Core expansion: given a set of demanded items × rates, recursively expand
 // using default recipes, aggregating cycles per recipe and crediting
 // byproducts. Returns the steps plus the raw input rates.
+//
+// `stopAtItems` short-circuits expansion: any *derived* demand for an item in
+// this set is routed straight to rawInputs (no recipe lookup). Used by the
+// solver to treat user-declared sources as leaves of the chain, even if those
+// sources are intermediates like plastic or wire — so a user with 120 plastic
+// can plan circuit boards without the solver pretending to also build the
+// plastic factory. Initial-demand items are exempt: a target that happens to
+// coincide with a declared source still expands through its recipe.
 function expandDemand(
   initialDemand: Flow[],
   clockMode: ClockMode,
+  stopAtItems?: ReadonlySet<string>,
 ): {
   steps: ProductionStep[];
   rawInputs: Map<string, number>;
@@ -160,9 +169,11 @@ function expandDemand(
   const warnings: SolverWarning[] = [];
 
   const demand = new Map<string, number>();
+  const initialItems = new Set<string>();
   for (const t of initialDemand) {
     if (t.ratePerMin > 0) {
       demand.set(t.item, (demand.get(t.item) ?? 0) + t.ratePerMin);
+      initialItems.add(t.item);
     }
   }
 
@@ -186,6 +197,11 @@ function expandDemand(
       byproductCredits.set(item, credit - used);
       needed -= used;
       if (needed <= 1e-9) continue;
+    }
+
+    if (stopAtItems?.has(item) && !initialItems.has(item)) {
+      rawInputs.set(item, (rawInputs.get(item) ?? 0) + needed);
+      continue;
     }
 
     const recipe = pickDefaultRecipe(item);
@@ -258,11 +274,15 @@ function buildSolution(
   clockMode: ClockMode,
   extraWarnings: SolverWarning[],
 ): Solution {
-  const expansion = expandDemand(achievedTargets, clockMode);
+  const stopAtItems = new Set(declaredSources.map((s) => s.item));
+  const expansion = expandDemand(achievedTargets, clockMode, stopAtItems);
 
-  const rawList: Flow[] = [...expansion.rawInputs.entries()].map(
-    ([item, ratePerMin]) => ({ item, ratePerMin }),
-  );
+  // Declared sources are surfaced in the Sources section with their own
+  // utilisation; suppress them from the Raw list to avoid showing the same
+  // flow twice.
+  const rawList: Flow[] = [...expansion.rawInputs.entries()]
+    .filter(([item]) => !stopAtItems.has(item))
+    .map(([item, ratePerMin]) => ({ item, ratePerMin }));
   rawList.sort((a, b) => collator.compare(itemKey(a.item), itemKey(b.item)));
 
   const byproducts: Flow[] = [];
@@ -316,6 +336,7 @@ export function solveSystem(spec: SystemSpec): Solution {
     (t) => t.item && (t.fill || t.ratePerMin > 0),
   );
   const sources = spec.sources.filter((s) => s.item && s.ratePerMin > 0);
+  const stopAtItems = new Set(sources.map((s) => s.item));
 
   if (allValid.length === 0) {
     return {
@@ -360,7 +381,7 @@ export function solveSystem(spec: SystemSpec): Solution {
   // Phase 1: ensure fixed targets fit in the source budget; scale them down
   // proportionally if not.
   if (fixedTargets.length > 0) {
-    const probe = expandDemand(fixedTargets, "snap5");
+    const probe = expandDemand(fixedTargets, "snap5", stopAtItems);
     let maxRatio = 0;
     let limiting: Flow | null = null;
     for (const src of sources) {
@@ -391,7 +412,7 @@ export function solveSystem(spec: SystemSpec): Solution {
     sources.map((s) => [s.item, s.ratePerMin]),
   );
   if (achievedFixed.length > 0) {
-    const fixedProbe = expandDemand(achievedFixed, "snap5");
+    const fixedProbe = expandDemand(achievedFixed, "snap5", stopAtItems);
     for (const src of sources) {
       const consumed = fixedProbe.rawInputs.get(src.item) ?? 0;
       remaining.set(src.item, src.ratePerMin - consumed);
@@ -419,6 +440,7 @@ export function solveSystem(spec: SystemSpec): Solution {
       unit: expandDemand(
         [{ item: f.item as string, ratePerMin: 1 }],
         "snap5",
+        stopAtItems,
       ).rawInputs,
     }));
 

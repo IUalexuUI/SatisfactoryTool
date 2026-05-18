@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { items } from "../data";
 import { solveSystem, type SystemSpec } from "../solver";
 import {
   emptyFlow,
@@ -15,9 +14,6 @@ interface Props {
   onChange: (next: ProductionSystem) => void;
   onDelete: () => void;
 }
-
-const isRawResource = (className: string) =>
-  items[className]?.kind === "FGResourceDescriptor";
 
 export function SystemView({ system, onChange, onDelete }: Props) {
   const { t } = useI18n();
@@ -103,7 +99,6 @@ export function SystemView({ system, onChange, onDelete }: Props) {
         onRemove={(idx) =>
           updateList("sources", (l) => l.filter((_, i) => i !== idx))
         }
-        filterFn={isRawResource}
         emptyMessage={t.system.sourcesEmpty}
         unit={t.system.unitRaw}
       />

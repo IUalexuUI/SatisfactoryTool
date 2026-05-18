@@ -29,10 +29,10 @@ const RU = {
       targets: "Конечные предметы",
       targetsHelper:
         "Что хочешь получать на выходе. Чекбокс «Заполнить» утилизирует остаток сырья — solver максимизирует скорость этой цели.",
-      sources: "Сырьё (необязательно)",
+      sources: "Источники (необязательно)",
       sourcesHelper:
-        "Если задано — solver масштабирует выход под доступное сырьё. Здания работают на 100%.",
-      sourcesEmpty: "Сырьё не ограничено — добавь «+», если хочешь задать лимит",
+        "Уже имеющийся на входе поток — сырьё или готовые полуфабрикаты (например, пластик, кейтеривая катушка). Solver не строит цепочку для этих предметов, а распределяет их между целями. Здания работают на 100%.",
+      sourcesEmpty: "Источники не ограничены — добавь «+», если хочешь задать лимит",
       needTarget: "Добавь конечный предмет, чтобы рассчитать цепочку.",
       fillLabel: "Заполнить",
       fillTooltip: "Использовать остаток сырья для максимизации этой цели",
@@ -119,10 +119,10 @@ const EN: Strings = {
       targets: "Output items",
       targetsHelper:
         'What you want to produce. The "Fill" checkbox uses up remaining source — the solver maximises this target.',
-      sources: "Source (optional)",
+      sources: "Sources (optional)",
       sourcesHelper:
-        "If set — solver scales output to fit available source. Buildings run at 100%.",
-      sourcesEmpty: 'Source unlimited — press "+" to set a limit',
+        "Inputs you already have — raw resources or intermediates (e.g. plastic, caterium coil). The solver does not build a chain for these; it distributes them across targets. Buildings run at 100%.",
+      sourcesEmpty: 'No source limit — press "+" to set one',
       needTarget: "Add an output item to calculate the chain.",
       fillLabel: "Fill",
       fillTooltip: "Use remaining source to maximise this target",
